@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Store {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String    // 店舗名
+  code        String    @unique  // 店舗固有のコード
+  address     String?   
+  phone       String?   
+  adminEmail  String    @unique  // 店舗管理者のメール
+  products    Product[]
+  users       User[]    
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model User {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  email       String    @unique
+  password    String
+  name        String
+  role        Role      @default(STAFF)
+  storeId     String    @db.ObjectId
+  store       Store     @relation(fields: [storeId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  brand      String
+  productName String
+  colorCode  String
+  colorName  String
+  type       Type
+  price     Float
+  quantity  Int      @default(1)
+  usageCount Int     @default(0)
+  lastUsed  DateTime?
+  averageUsesPerMonth Float?
+  estimatedDaysLeft  Int?
+  minStockAlert  Int @default(5)
+  usages    Usage[]
+  store     Store    @relation(fields: [storeId], references: [id])
+  storeId   String   @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Usage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  date      DateTime
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String   @db.ObjectId
+  note     String?
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum Type {
+  POLISH
+  GEL
+}
