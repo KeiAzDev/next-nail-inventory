@@ -138,7 +138,7 @@ export default function StoreRegistrationForm() {
           onChange={handleChange}
           className={`mt-1 block w-full rounded-md ${
             errors.storeName ? 'border-red-300' : 'border-gray-300'
-          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
+          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800`}
         />
         {errors.storeName && (
           <p className="mt-1 text-sm text-red-600">{errors.storeName}</p>
@@ -157,7 +157,7 @@ export default function StoreRegistrationForm() {
           onChange={handleChange}
           className={`mt-1 block w-full rounded-md ${
             errors.storeCode ? 'border-red-300' : 'border-gray-300'
-          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
+          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800`}
         />
         {errors.storeCode && (
           <p className="mt-1 text-sm text-red-600">{errors.storeCode}</p>
@@ -174,7 +174,7 @@ export default function StoreRegistrationForm() {
           name="address"
           value={formData.address}
           onChange={handleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800"
         />
       </div>
 
@@ -188,7 +188,7 @@ export default function StoreRegistrationForm() {
           name="phone"
           value={formData.phone}
           onChange={handleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800"
         />
       </div>
 
@@ -204,7 +204,7 @@ export default function StoreRegistrationForm() {
           onChange={handleChange}
           className={`mt-1 block w-full rounded-md ${
             errors.adminEmail ? 'border-red-300' : 'border-gray-300'
-          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
+          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800`}
         />
         {errors.adminEmail && (
           <p className="mt-1 text-sm text-red-600">{errors.adminEmail}</p>
@@ -223,7 +223,7 @@ export default function StoreRegistrationForm() {
           onChange={handleChange}
           className={`mt-1 block w-full rounded-md ${
             errors.adminName ? 'border-red-300' : 'border-gray-300'
-          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
+          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800`}
         />
         {errors.adminName && (
           <p className="mt-1 text-sm text-red-600">{errors.adminName}</p>
@@ -242,7 +242,7 @@ export default function StoreRegistrationForm() {
           onChange={handleChange}
           className={`mt-1 block w-full rounded-md ${
             errors.password ? 'border-red-300' : 'border-gray-300'
-          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
+          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800`}
         />
         {errors.password && (
           <p className="mt-1 text-sm text-red-600">{errors.password}</p>
@@ -261,7 +261,7 @@ export default function StoreRegistrationForm() {
           onChange={handleChange}
           className={`mt-1 block w-full rounded-md ${
             errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
+          } shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800`}
         />
         {errors.confirmPassword && (
           <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
