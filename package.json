@@ -11,10 +11,20 @@
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",
     "@prisma/client": "^6.2.1",
+    "@radix-ui/react-dialog": "^1.1.5",
+    "@radix-ui/react-label": "^2.1.1",
+    "@radix-ui/react-select": "^2.1.5",
+    "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-toast": "^1.2.5",
+    "@tanstack/react-query": "^5.65.0",
+    "@tanstack/react-query-devtools": "^5.65.0",
     "bcryptjs": "^2.4.3",
+    "class-variance-authority": "^0.7.1",
+    "lucide-react": "^0.474.0",
     "next": "15.1.6",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
