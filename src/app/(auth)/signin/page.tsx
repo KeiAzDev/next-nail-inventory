@@ -1,6 +1,6 @@
 'use client'
 
-import { signIn } from 'next-auth/react'
+import { signIn, getSession } from 'next-auth/react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -30,8 +30,13 @@ export default function SignIn() {
         return
       }
 
-      router.push('/dashboard')
-      router.refresh()
+      const session = await getSession()
+      if (session?.user?.storeId) {
+        router.push(`/stores/${session.user.storeId}`)
+        router.refresh()
+      } else {
+        setError('店舗情報の取得に失敗しました')
+      }
     } catch (error) {
       setError('エラーが発生しました')
     } finally {

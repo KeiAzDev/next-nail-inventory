@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 import Header from '@/components/layouts/header'
 import Sidebar from '@/components/layouts/sidebar'
+import QueryProvider from '@/components/providers/query-provider'
 
 export default function DashboardLayout({
   children
@@ -34,16 +35,18 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header />
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 p-6">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
-        </main>
+    <QueryProvider>
+      <div className="min-h-screen bg-gray-100 text-gray-800">
+        <Header />
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 p-6">
+            <div className="max-w-7xl mx-auto">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </QueryProvider>
   )
 }
