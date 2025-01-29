@@ -48,36 +48,34 @@ export default function Sidebar() {
   ]
 
   return (
-    <aside className="hidden md:flex md:flex-shrink-0">
-      <div className="flex flex-col w-64">
-        <div className="flex flex-col h-0 flex-1">
-          <nav className="flex-1 space-y-1 px-2 py-4 bg-white">
-            {navigation.map((item) => {
-              const isActive = pathname === item.href
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`
-                    group flex items-center px-2 py-2 text-sm font-medium rounded-md
-                    ${isActive 
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
-                  `}
-                >
-                  <span className={`
-                    mr-3 flex-shrink-0 h-6 w-6
-                    ${isActive ? 'text-gray-500' : 'text-gray-400 group-hover:text-gray-500'}
-                  `}>
-                    {item.icon}
-                  </span>
-                  {item.name}
-                </Link>
-              )
-            })}
-          </nav>
-        </div>
-      </div>
-    </aside>
+    <aside className="hidden md:flex md:flex-shrink-0 h-screen">
+  <div className="flex flex-col w-64 bg-white border-r">
+    <nav className="flex-1 space-y-1 px-2 py-4">
+      {navigation.map((item) => {
+        const isActive = pathname === item.href
+        return (
+          <Link
+            key={item.name}
+            href={item.href}
+            className={`
+              group flex items-center px-2 py-2 text-sm font-medium rounded-md
+              ${isActive 
+                ? 'bg-gray-100 text-gray-900'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
+            `}
+          >
+            <span className={`
+              mr-3 flex-shrink-0 h-6 w-6
+              ${isActive ? 'text-gray-500' : 'text-gray-400 group-hover:text-gray-500'}
+            `}>
+              {item.icon}
+            </span>
+            {item.name}
+          </Link>
+        )
+      })}
+    </nav>
+  </div>
+</aside>
   )
 }

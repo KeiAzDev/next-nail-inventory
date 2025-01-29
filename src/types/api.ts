@@ -1,3 +1,10 @@
+// Query Keys Type Definition
+export type QueryKeys = {
+  store: ['store', string]
+  products: ['products', string]
+  staff: ['staff', string]
+}
+
 export type Store = {
   id: string
   name: string
