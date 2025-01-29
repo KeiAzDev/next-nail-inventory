@@ -87,6 +87,33 @@ export default function AddProductModal({
     mutate(formData)
   }
 
+  // 全角数字を半角に変換する関数
+const convertFullWidthToHalfWidth = (value: string): string => {
+  return value.replace(/[０-９]/g, (s) => {
+    return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+  });
+};
+
+// 数値として有効な文字列かチェックする関数（全角数字を含む）
+const isValidNumberInput = (value: string): boolean => {
+  // 空文字列は許可
+  if (value === '') return true;
+  // 全角数字を半角に変換
+  const halfWidth = convertFullWidthToHalfWidth(value);
+  // 半角数字のみであることをチェック
+  return /^\d*$/.test(halfWidth);
+};
+
+// 数値の入力を処理する関数
+const handleNumberInput = (
+  value: string,
+  defaultValue: number = 0
+): number => {
+  if (value === '') return defaultValue;
+  const halfWidth = convertFullWidthToHalfWidth(value);
+  return Number(halfWidth);
+};
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px] bg-white/95 backdrop-blur-sm">
@@ -174,10 +201,25 @@ export default function AddProductModal({
               <Label htmlFor="price" className="text-gray-700">価格</Label>
               <Input
                 id="price"
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
                 value={formData.price}
-                onChange={(e) => setFormData(prev => ({ ...prev, price: Number(e.target.value) }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (isValidNumberInput(value)) {
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      price: handleNumberInput(value, 0)
+                    }))
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = convertFullWidthToHalfWidth(e.target.value);
+                  setFormData(prev => ({
+                    ...prev,
+                    price: handleNumberInput(value, 0)
+                  }));
+                }}
                 className="border-gray-200"
                 required
               />
@@ -187,9 +229,14 @@ export default function AddProductModal({
               <Input
                 id="quantity"
                 type="number"
-                min="1"
+                inputMode="numeric"
                 value={formData.quantity}
-                onChange={(e) => setFormData(prev => ({ ...prev, quantity: Number(e.target.value) }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || /^\d*$/.test(value)) {
+                    setFormData(prev => ({ ...prev, quantity: value === '' ? 1 : Number(value) }))
+                  }
+                }}
                 className="border-gray-200"
                 required
               />
@@ -213,7 +260,7 @@ export default function AddProductModal({
             <Button 
               variant="outline" 
               onClick={() => onOpenChange(false)}
-              className="bg-gray-50 hover:bg-gray-100 text-gray-800"
+              className="bg-gray-50 hover:bg-gray-100 text-gray-700"
             >
               キャンセル
             </Button>
