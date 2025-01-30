@@ -1,3 +1,4 @@
+//middleware.ts
 import { NextResponse, type NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 

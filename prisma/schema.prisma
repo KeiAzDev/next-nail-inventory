@@ -4,6 +4,7 @@
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,17 +14,37 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Type {
+  POLISH
+  GEL_COLOR
+  GEL_BASE
+  GEL_TOP
+}
+
+enum NailLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
 model Store {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  name        String    // 店舗名
-  code        String    @unique  // 店舗固有のコード
-  address     String?   
-  phone       String?   
-  adminEmail  String    @unique  // 店舗管理者のメール
-  products    Product[]
-  users       User[]    
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  code          String    @unique
+  address       String?   
+  phone         String?   
+  adminEmail    String    @unique
+  products      Product[]
+  users         User[]    
+  serviceTypes  ServiceType[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model User {
@@ -39,41 +60,102 @@ model User {
 }
 
 model Product {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  brand      String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  brand       String
   productName String
-  colorCode  String
-  colorName  String
-  type       Type
-  price     Float
-  quantity  Int      @default(1)
-  usageCount Int     @default(0)
-  lastUsed  DateTime?
+  colorCode   String
+  colorName   String
+  type        Type
+  price       Float
+  quantity    Int       @default(1)
+  
+  // 容量関連フィールドをオプショナルに変更
+  capacity    Float?    // nullable に変更
+  capacityUnit String?  // nullable に変更
+  averageUsePerService Float?  // nullable に変更
+  recommendedAlertPercentage Int @default(20)
+  
+  // 既存のフィールド
+  usageCount  Int       @default(0)
+  lastUsed    DateTime?
   averageUsesPerMonth Float?
-  estimatedDaysLeft  Int?
-  minStockAlert  Int @default(5)
-  usages    Usage[]
-  store     Store    @relation(fields: [storeId], references: [id])
-  storeId   String   @db.ObjectId
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  estimatedDaysLeft Int?
+  minStockAlert Int    @default(5)
+  
+  // リレーション
+  usages      Usage[]
+  relatedUsages RelatedProductUsage[]
+  serviceTypeProducts ServiceTypeProduct[]
+  store       Store      @relation(fields: [storeId], references: [id])
+  storeId     String     @db.ObjectId
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model ServiceType {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  defaultUsageAmount Float
+  productType     Type
+  
+  // 爪の長さごとの使用量調整係数
+  shortLengthRate   Int     @default(80)
+  mediumLengthRate  Int     @default(100)
+  longLengthRate    Int     @default(130)
+  
+  allowCustomAmount Boolean @default(false)
+  
+  // リレーション
+  serviceTypeProducts ServiceTypeProduct[] // 中間テーブルへの参照
+  usages          Usage[]
+  store           Store     @relation(fields: [storeId], references: [id])
+  storeId         String    @db.ObjectId
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([name, storeId])
+}
+
+model ServiceTypeProduct {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id])
+  serviceTypeId String    @db.ObjectId
+  product       Product   @relation(fields: [productId], references: [id])
+  productId     String    @db.ObjectId
+  usageAmount   Float
+  isRequired    Boolean   @default(true)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([serviceTypeId, productId])
 }
 
 model Usage {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  date      DateTime
-  product   Product  @relation(fields: [productId], references: [id])
-  productId String   @db.ObjectId
-  note     String?
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  date          DateTime
+  usageAmount   Float
+  nailLength    NailLength
+  isCustomAmount Boolean  @default(false)
+  
+  relatedUsages RelatedProductUsage[]
+  serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id])
+  serviceTypeId String     @db.ObjectId
+  product       Product    @relation(fields: [productId], references: [id])
+  productId     String     @db.ObjectId
+  
+  note          String?
+  createdAt     DateTime   @default(now())
 }
 
-enum Role {
-  ADMIN
-  MANAGER
-  STAFF
-}
-
-enum Type {
-  POLISH
-  GEL
+model RelatedProductUsage {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  usage         Usage     @relation(fields: [usageId], references: [id])
+  usageId       String    @db.ObjectId
+  product       Product   @relation(fields: [productId], references: [id])
+  productId     String    @db.ObjectId
+  amount        Float
+  
+  createdAt     DateTime  @default(now())
 }

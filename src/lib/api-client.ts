@@ -1,4 +1,4 @@
-import type { Store, Product, StaffMember } from '@/types/api'
+import type { Store, Product, StaffMember, ServiceType, Usage, NailLength } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
   const response = await fetch(`/api/stores/${storeId}`)
@@ -38,6 +38,46 @@ export async function updateStoreDetails(
   
   if (!response.ok) {
     throw new Error('Failed to update store details')
+  }
+  
+  return response.json()
+}
+
+export async function fetchServiceTypes(storeId: string): Promise<ServiceType[]> {
+  const response = await fetch(`/api/stores/${storeId}/service-types`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch service types')
+  }
+  return response.json()
+}
+
+export async function recordUsage(
+  storeId: string,
+  data: {
+    serviceTypeId: string
+    mainProduct: {
+      productId: string
+      amount: number
+    }
+    relatedProducts: {
+      productId: string
+      amount: number
+    }[]
+    nailLength: NailLength
+    date: string
+    note?: string
+  }
+): Promise<Usage> {
+  const response = await fetch(`/api/stores/${storeId}/usages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to record usage')
   }
   
   return response.json()
