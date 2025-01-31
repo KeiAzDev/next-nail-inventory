@@ -1,3 +1,4 @@
+//src/components/modals/usage-record-modal.tsx
 'use client'
 
 import { useState } from 'react'
@@ -186,32 +187,34 @@ export default function UsageRecordModal({
   }
 
   // ローディング状態の表示
-  if (isLoadingServiceTypes || isLoadingProducts) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[425px]">
-          <div className="w-full h-96 flex items-center justify-center">
+  const LoadingDialog = () => (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>使用記録</DialogTitle>
+          <div className="w-full h-40 flex items-center justify-center">
             <div className="animate-pulse">Loading...</div>
           </div>
-        </DialogContent>
-      </Dialog>
-    )
-  }
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>
+  )
 
   // エラー状態の表示
-  if (serviceTypesError || productsError) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[425px]">
-          <Alert variant="destructive">
-            <AlertDescription>
-              データの取得に失敗しました。再度お試しください。
-            </AlertDescription>
-          </Alert>
-        </DialogContent>
-      </Dialog>
-    )
-  }
+  const ErrorDialog = () => (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>使用記録</DialogTitle>
+        </DialogHeader>
+        <Alert variant="destructive">
+          <AlertDescription>
+            データの取得に失敗しました。再度お試しください。
+          </AlertDescription>
+        </Alert>
+      </DialogContent>
+    </Dialog>
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

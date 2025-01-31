@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import { Role } from '@prisma/client'
+import { Role, Prisma } from '@prisma/client'
+import { createDefaultServiceTypes, ServiceTypeError } from '@/lib/service-types/create-defaults'
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     // パスワードのハッシュ化
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // トランザクションで店舗と管理者を同時に作成
+    // トランザクションで店舗、管理者、デフォルト施術タイプを作成
     const result = await prisma.$transaction(async (tx) => {
       // 店舗の作成
       const store = await tx.store.create({
@@ -75,16 +76,38 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      return { store, admin }
+      // デフォルト施術タイプの作成
+      const serviceTypes = await createDefaultServiceTypes(tx, store.id)
+
+      return { store, admin, serviceTypes }
+    }, {
+      maxWait: 10000, // トランザクションのタイムアウト設定: 10秒
+      timeout: 30000  // 全体の実行タイムアウト: 30秒
     })
 
     return NextResponse.json({
-      message: '店舗と管理者アカウントが作成されました',
+      message: '店舗、管理者アカウント、基本設定が作成されました',
       storeId: result.store.id
     }, { status: 201 })
 
   } catch (error) {
     console.error('Registration error:', error)
+    
+    // エラーの種類に応じた適切なレスポンス
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return NextResponse.json(
+        { error: 'データベース処理中にエラーが発生しました' },
+        { status: 500 }
+      )
+    }
+
+    if (error instanceof ServiceTypeError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(
       { error: '登録処理中にエラーが発生しました' },
       { status: 500 }
