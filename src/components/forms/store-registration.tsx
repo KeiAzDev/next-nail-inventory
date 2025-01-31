@@ -85,6 +85,16 @@ export default function StoreRegistrationForm() {
       return
     }
 
+    console.log('送信データ:', {
+      storeName: formData.storeName,
+      storeCode: formData.storeCode,
+      address: formData.address,
+      phone: formData.phone,
+      adminEmail: formData.adminEmail,
+      adminName: formData.adminName,
+      // パスワードは表示しない
+    })
+
     setIsLoading(true)
     try {
       const response = await fetch('/api/auth/register', {

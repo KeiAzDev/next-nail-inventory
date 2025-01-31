@@ -22,6 +22,7 @@ export async function createDefaultServiceTypes(
     const serviceTypes = []
 
     for (const defaultType of DEFAULT_SERVICE_TYPES) {
+      // 基本の施術タイプのみを作成
       const serviceType = await tx.serviceType.create({
         data: {
           name: defaultType.name,
@@ -31,55 +32,15 @@ export async function createDefaultServiceTypes(
           mediumLengthRate: defaultType.mediumLengthRate,
           longLengthRate: defaultType.longLengthRate,
           allowCustomAmount: defaultType.allowCustomAmount,
-          store: {
-            connect: { id: storeId }
-          }
+          store: { connect: { id: storeId } }
         }
       })
 
-      // 関連商品の設定がある場合の処理
-      if (defaultType.requiredProducts) {
-        for (const requiredProduct of defaultType.requiredProducts) {
-          await tx.serviceTypeProduct.create({
-            data: {
-              serviceType: { connect: { id: serviceType.id } },
-              product: {
-                connectOrCreate: {
-                  where: {
-                    id: '0' // ダミーID、実際には適切な検索条件を設定
-                  },
-                  create: {
-                    brand: 'Default Brand',
-                    productName: `Default ${requiredProduct.type}`,
-                    colorCode: '#000000',
-                    colorName: 'Default',
-                    type: requiredProduct.type,
-                    price: 0,
-                    store: { connect: { id: storeId } }
-                  }
-                }
-              },
-              usageAmount: requiredProduct.defaultAmount,
-              isRequired: requiredProduct.isRequired
-            }
-          })
-        }
-      }
-
+      // requiredProductsの自動作成を削除
       serviceTypes.push(serviceType)
     }
 
-    return serviceTypes.map(serviceType => ({
-      name: serviceType.name,
-      defaultUsageAmount: serviceType.defaultUsageAmount,
-      productType: serviceType.productType,
-      shortLengthRate: serviceType.shortLengthRate,
-      mediumLengthRate: serviceType.mediumLengthRate,
-      longLengthRate: serviceType.longLengthRate,
-      allowCustomAmount: serviceType.allowCustomAmount,
-      store: { connect: { id: storeId } }
-    }))
-
+    return serviceTypes
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       throw new ServiceTypeError(

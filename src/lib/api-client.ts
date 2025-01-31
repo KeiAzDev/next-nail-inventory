@@ -82,3 +82,17 @@ export async function recordUsage(
   
   return response.json()
 }
+
+export async function createServiceType(storeId: string, data: any): Promise<ServiceType> {
+  const response = await fetch(`/api/stores/${storeId}/service-types`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to create service type')
+  }
+  
+  return response.json()
+}

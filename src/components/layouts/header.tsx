@@ -1,6 +1,7 @@
 'use client'
 
 import { useSession, signOut } from 'next-auth/react'
+import Link from 'next/link'
 import { useState } from 'react'
 
 export default function Header() {
@@ -12,7 +13,16 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <h1 className="text-xl font-semibold">ネイルサロン在庫管理</h1>
+          {session?.user?.storeId ? (
+              <Link 
+                href={`/stores/${session.user.storeId}`}
+                className="text-xl font-semibold hover:text-gray-600 transition-colors"
+              >
+                Inventory Management
+              </Link>
+            ) : (
+              <h1 className="text-xl font-semibold">Inventory Management (No Name)</h1>
+            )}
           </div>
 
           <div className="flex items-center">
