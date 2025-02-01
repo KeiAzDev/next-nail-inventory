@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
+import { ColorPicker } from "@/components/ui/color-picker"
 import type { ProductType } from "@/types/api";
 
 interface AddProductModalProps {
@@ -43,10 +44,18 @@ interface ProductFormData {
   recommendedAlertPercentage: number;
 }
 
+// 商品タイプごとのデフォルトカラー
+const defaultColors = {
+  POLISH: "rgba(0, 0, 0, 1)",
+  GEL_COLOR: "rgba(0, 0, 0, 1)",
+  GEL_BASE: "rgba(255, 255, 255, 0.5)",
+  GEL_TOP: "rgba(255, 255, 255, 0.7)",
+};
+
 const initialFormData: ProductFormData = {
   brand: "",
   productName: "",
-  colorCode: "#000000",
+  colorCode: defaultColors.POLISH,
   colorName: "",
   type: "POLISH",
   price: 0,
@@ -65,6 +74,21 @@ export default function AddProductModal({
 }: AddProductModalProps) {
   const [formData, setFormData] = useState<ProductFormData>(initialFormData);
   const queryClient = useQueryClient();
+
+  // モーダルが開かれたときにフォームをリセット
+  useEffect(() => {
+    if (open) {
+      setFormData(initialFormData);
+    }
+  }, [open]);
+
+  // タイプが変更されたときのデフォルトカラー設定
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      colorCode: defaultColors[prev.type]
+    }));
+  }, [formData.type]);
 
   const { mutate, isPending } = useMutation({
     mutationFn: async (data: ProductFormData) => {
@@ -110,11 +134,8 @@ export default function AddProductModal({
 
   // 数値として有効な文字列かチェックする関数（全角数字を含む）
   const isValidNumberInput = (value: string): boolean => {
-    // 空文字列は許可
     if (value === "") return true;
-    // 全角数字を半角に変換
     const halfWidth = convertFullWidthToHalfWidth(value);
-    // 半角数字のみであることをチェック
     return /^\d*$/.test(halfWidth);
   };
 
@@ -128,13 +149,18 @@ export default function AddProductModal({
     return Number(halfWidth);
   };
 
+  // 小数点以下の数値入力を処理する関数
+  const handleDecimalInput = (value: string): boolean => {
+    return /^\d*\.?\d*$/.test(value);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] bg-white overflow-y-auto">
         <DialogHeader className="sticky top-0 bg-white py-2 z-10 border-b">
           <DialogTitle className="text-xl font-semibold text-gray-900">商品登録</DialogTitle>
           <DialogDescription className="text-gray-600">
-            新しい商品の情報を入力してください。すべての項目が必須です。
+            新しい商品の情報を入力してください。
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 px-1 pb-4">
@@ -173,57 +199,6 @@ export default function AddProductModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="grid w-full gap-1.5">
-              <Label htmlFor="colorCode" className="text-gray-700">
-                カラーコード
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="colorCode"
-                  value={formData.colorCode}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      colorCode: e.target.value,
-                    }))
-                  }
-                  className="border-gray-200"
-                  required
-                />
-                <Input
-                  type="color"
-                  value={formData.colorCode}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      colorCode: e.target.value,
-                    }))
-                  }
-                  className="w-12 h-9 p-1 cursor-pointer"
-                  aria-label="カラーピッカー"
-                />
-              </div>
-            </div>
-            <div className="grid w-full gap-1.5">
-              <Label htmlFor="colorName" className="text-gray-700">
-                カラー名
-              </Label>
-              <Input
-                id="colorName"
-                value={formData.colorName}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    colorName: e.target.value,
-                  }))
-                }
-                className="border-gray-200"
-                required
-              />
-            </div>
-          </div>
-
           <div className="grid w-full gap-1.5">
             <Label htmlFor="type" className="text-gray-700">
               種類
@@ -244,6 +219,35 @@ export default function AddProductModal({
                 <SelectItem value="GEL_TOP">ジェルトップ</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="grid w-full gap-1.5">
+            <Label htmlFor="color" className="text-gray-700">
+              カラー設定
+            </Label>
+            <ColorPicker
+              value={formData.colorCode}
+              onChange={(color) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  colorCode: color,
+                }))
+              }
+              showOpacity={['GEL_BASE', 'GEL_TOP'].includes(formData.type)}
+            />
+            <Input
+              id="colorName"
+              placeholder="カラー名"
+              value={formData.colorName}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  colorName: e.target.value,
+                }))
+              }
+              className="mt-2 border-gray-200"
+              required
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -312,7 +316,7 @@ export default function AddProductModal({
                 value={formData.capacity ?? ""}
                 onChange={(e) => {
                   const value = e.target.value;
-                  if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                  if (handleDecimalInput(value)) {
                     setFormData((prev) => ({
                       ...prev,
                       capacity: value === "" ? undefined : Number(value),
@@ -354,7 +358,7 @@ export default function AddProductModal({
               value={formData.averageUsePerService ?? ""}
               onChange={(e) => {
                 const value = e.target.value;
-                if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                if (handleDecimalInput(value)) {
                   setFormData((prev) => ({
                     ...prev,
                     averageUsePerService:

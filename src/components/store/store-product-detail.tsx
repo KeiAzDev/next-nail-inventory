@@ -1,6 +1,9 @@
 'use client'
 
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
+import { useToast } from '@/components/ui/use-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -8,15 +11,29 @@ import { Package2, AlertTriangle } from 'lucide-react'
 import { fetchProductDetails } from '@/lib/api-client'
 import type { Product } from '@/types/api'
 import UsageRecordModal from '@/components/modals/usage-record-modal'
-import { useState, useEffect } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 interface StoreProductDetailProps {
   storeId: string
   productId: string
 }
 
+// 商品削除用の関数
+async function deleteProduct(storeId: string, productId: string): Promise<void> {
+  const response = await fetch(`/api/stores/${storeId}/products/${productId}`, {
+    method: 'DELETE',
+  })
+  
+  if (!response.ok) {
+    throw new Error('商品の削除に失敗しました')
+  }
+}
+
 export default function StoreProductDetail({ storeId, productId }: StoreProductDetailProps) {
+  const router = useRouter()
+  const { toast } = useToast()
   const [showUsageModal, setShowUsageModal] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   const { data: product, error, isLoading } = useQuery<Product>({
     queryKey: ['product', productId],
@@ -26,15 +43,15 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
   // デバッグ情報の出力
   useEffect(() => {
     if (process.env.NODE_ENV === 'development' && product) {
-      console.group('Product Detail Debug Info');
+      console.group('Product Detail Debug Info')
       console.log('Product:', {
         id: product.id,
         type: product.type,
         name: `${product.brand} ${product.productName}`
-      });
-      console.groupEnd();
+      })
+      console.groupEnd()
     }
-  }, [product]);
+  }, [product])
 
   // 在庫状態の判定
   const getStockStatus = (product: Product) => {
@@ -79,6 +96,26 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
       label: '在庫なし',
       description: '補充が必要です',
       showAlert: true
+    }
+  }
+
+  // 商品削除の処理
+  const handleDelete = async () => {
+    try {
+      await deleteProduct(storeId, productId)
+      toast({
+        title: '商品を削除しました',
+        variant: 'default',
+      })
+      router.push(`/stores/${storeId}/inventory`)
+    } catch (error) {
+      toast({
+        title: '商品の削除に失敗しました',
+        description: error instanceof Error ? error.message : '予期せぬエラーが発生しました',
+        variant: 'destructive',
+      })
+    } finally {
+      setShowDeleteDialog(false)
     }
   }
 
@@ -131,13 +168,21 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
               <Package2 className="h-5 w-5" />
               <CardTitle>商品詳細</CardTitle>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => setShowUsageModal(true)}
-              className="bg-white hover:bg-gray-100"
-            >
-              使用記録
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowUsageModal(true)}
+                className="bg-white hover:bg-gray-100"
+              >
+                使用記録
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                削除
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -273,11 +318,40 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
       </Card>
 
       <UsageRecordModal
-        storeId={storeId}
         open={showUsageModal}
-        onOpenChange={setShowUsageModal}
-        selectedProduct={product} // 商品情報を渡す
+        onOpenChange={() => setShowUsageModal(false)}
+        storeId={storeId}
+        selectedProduct={product}
       />
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>商品の削除</DialogTitle>
+            <DialogDescription>
+              この商品を削除してもよろしいですか？
+              <br />
+              関連する全てのデータ（使用記録、ロット情報など）が削除されます。
+              <br />
+              この操作は取り消すことができません。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+            >
+              削除する
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

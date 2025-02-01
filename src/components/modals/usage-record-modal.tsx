@@ -318,9 +318,9 @@ export default function UsageRecordModal({
                 <SelectTrigger className="bg-white border-gray-200 text-gray-800">
                   <SelectValue placeholder="施術タイプを選択" />
                 </SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white text-gray-800">
                   {availableServiceTypes.length === 0 ? (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="no-options" disabled>
                       選択可能な施術タイプがありません
                     </SelectItem>
                   ) : (
@@ -345,7 +345,7 @@ export default function UsageRecordModal({
                 <SelectTrigger className="bg-white border-gray-200 text-gray-800">
                   <SelectValue placeholder="爪の長さを選択" />
                 </SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white text-gray-800">
                   <SelectItem value="SHORT">ショート</SelectItem>
                   <SelectItem value="MEDIUM">ミディアム</SelectItem>
                   <SelectItem value="LONG">ロング</SelectItem>

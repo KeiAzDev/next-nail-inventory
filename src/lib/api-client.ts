@@ -105,3 +105,13 @@ export async function fetchProductDetails(storeId: string, productId: string): P
   }
   return response.json()
 }
+
+export async function deleteProduct(storeId: string, productId: string): Promise<void> {
+  const response = await fetch(`/api/stores/${storeId}/products/${productId}`, {
+    method: 'DELETE',
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to delete product')
+  }
+}

@@ -66,6 +66,7 @@ model Product {
   productName String
   colorCode   String
   colorName   String
+  opacity     Float     @default(1)  // 透明度（0-1）
   type        Type
   price       Float
   
@@ -109,6 +110,10 @@ model ProductLot {
   isInUse       Boolean   @default(false)  // 使用中かどうか
   currentAmount Float?                      // 現在の残量（使用中の場合のみ）
   startedAt     DateTime? // 使用開始日
+
+  // 使用記録との関連を追加
+  usages        Usage[]              // メイン使用記録
+  relatedUsages RelatedProductUsage[] // 関連使用記録
   
   createdAt     DateTime  @default(now())  // ロット追加日
   updatedAt     DateTime  @updatedAt
@@ -119,6 +124,11 @@ model ServiceType {
   name            String
   defaultUsageAmount Float
   productType     Type
+
+  // ジェル施術のための追加フィールド
+  isGelService    Boolean   @default(false)
+  requiresBase    Boolean   @default(false)
+  requiresTop     Boolean   @default(false)
   
   // 爪の長さごとの使用量調整係数
   shortLengthRate   Int     @default(80)
@@ -147,6 +157,8 @@ model ServiceTypeProduct {
   productId     String    @db.ObjectId
   usageAmount   Float
   isRequired    Boolean   @default(true)
+  productRole   String?   // "BASE", "COLOR", "TOP" などの役割を指定
+  order         Int       @default(0)  // 使用順序
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -160,12 +172,17 @@ model Usage {
   usageAmount   Float
   nailLength    NailLength
   isCustomAmount Boolean  @default(false)
+  isGelService  Boolean   @default(false)  // ジェル施術かどうか
   
   relatedUsages RelatedProductUsage[]
   serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id])
   serviceTypeId String     @db.ObjectId
   product       Product    @relation(fields: [productId], references: [id])
   productId     String     @db.ObjectId
+
+   // 使用したロットへの参照
+  usedLot      ProductLot? @relation(fields: [usedLotId], references: [id])
+  usedLotId    String?    @db.ObjectId
   
   note          String?
   createdAt     DateTime   @default(now())
@@ -178,6 +195,14 @@ model RelatedProductUsage {
   product       Product   @relation(fields: [productId], references: [id])
   productId     String    @db.ObjectId
   amount        Float
+
+  // 使用順序と役割の追加
+  order         Int       @default(0)
+  role          String?   // "BASE", "COLOR", "TOP"
+  
+  // 使用したロットへの参照
+  usedLot      ProductLot? @relation(fields: [usedLotId], references: [id])
+  usedLotId    String?    @db.ObjectId
   
   createdAt     DateTime  @default(now())
 }
