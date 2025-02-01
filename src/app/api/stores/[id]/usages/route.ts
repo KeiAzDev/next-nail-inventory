@@ -1,4 +1,3 @@
-//src/app/api/stores/[id]/usages/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
@@ -85,38 +84,47 @@ export async function POST(
     const body: CreateUsageRequest = await request.json()
 
     const usage = await prisma.$transaction(async (tx: TransactionClient) => {
+      // メイン商品の取得と在庫チェック
       const mainProduct = await tx.product.findUnique({
         where: { 
           id: body.mainProduct.productId,
           storeId 
+        },
+        include: {
+          currentProductLots: true
         }
       })
-
+    
       if (!mainProduct) {
         throw new Error('主要商品が見つかりません')
       }
-
-      if (mainProduct.quantity < 1) {
+    
+      if (mainProduct.lotQuantity < 1 && !mainProduct.currentProductLots.some(lot => lot.isInUse && (lot.currentAmount ?? 0) > 0)) {
         throw new Error('在庫が不足しています')
       }
 
+      // 関連商品のチェック
       for (const relatedProduct of body.relatedProducts) {
         const product = await tx.product.findUnique({
           where: { 
             id: relatedProduct.productId,
             storeId 
+          },
+          include: {
+            currentProductLots: true
           }
         })
-
+    
         if (!product) {
           throw new Error('関連商品が見つかりません')
         }
-
-        if (product.quantity < 1) {
+    
+        if (product.lotQuantity < 1 && !product.currentProductLots.some(lot => lot.isInUse && (lot.currentAmount ?? 0) > 0)) {
           throw new Error('関連商品の在庫が不足しています')
         }
       }
-
+    
+      // メイン商品の使用記録作成
       const newUsage = await tx.usage.create({
         data: {
           date: new Date(body.date),
@@ -150,40 +158,132 @@ export async function POST(
         }
       })
 
-      await tx.product.update({
-        where: { id: body.mainProduct.productId },
-        data: {
-          quantity: {
-            decrement: 1
-          },
-          usageCount: {
-            increment: 1
-          },
-          lastUsed: new Date(),
-          averageUsesPerMonth: {
-            set: await calculateAverageUses(tx, body.mainProduct.productId)
-          }
-        }
-      })
-
-      for (const relatedProduct of body.relatedProducts) {
-        await tx.product.update({
-          where: { id: relatedProduct.productId },
-          data: {
-            quantity: {
-              decrement: 1
-            },
-            usageCount: {
-              increment: 1
-            },
-            lastUsed: new Date(),
-            averageUsesPerMonth: {
-              set: await calculateAverageUses(tx, relatedProduct.productId)
+      // メイン商品のロット・在庫更新
+      const inUseLot = mainProduct.currentProductLots.find(lot => lot.isInUse)
+      if (inUseLot) {
+        const newAmount = (inUseLot.currentAmount ?? 0) - body.mainProduct.amount
+        if (newAmount <= 0 && mainProduct.lotQuantity > 0) {
+          // 現在のロットを使い切り状態に更新
+          await tx.productLot.update({
+            where: { id: inUseLot.id },
+            data: {
+              currentAmount: 0,
+              isInUse: false
             }
+          })
+    
+          // 新しいロットを使用開始
+          const newLot = await tx.productLot.findFirst({
+            where: {
+              productId: mainProduct.id,
+              isInUse: false
+            }
+          })
+    
+          if (newLot) {
+            await tx.productLot.update({
+              where: { id: newLot.id },
+              data: {
+                isInUse: true,
+                currentAmount: mainProduct.capacity,
+                startedAt: new Date()
+              }
+            })
+          }
+    
+          await tx.product.update({
+            where: { id: mainProduct.id },
+            data: {
+              lotQuantity: {
+                decrement: 1
+              }
+            }
+          })
+        } else {
+          // 現在のロットの残量を更新
+          await tx.productLot.update({
+            where: { id: inUseLot.id },
+            data: {
+              currentAmount: newAmount
+            }
+          })
+        }
+      }
+    
+      // 関連商品の在庫更新
+      for (const relatedUsage of body.relatedProducts) {
+        const relatedProduct = await tx.product.findUnique({
+          where: { id: relatedUsage.productId },
+          include: {
+            currentProductLots: true
           }
         })
+
+        if (relatedProduct) {
+          const inUseLot = relatedProduct.currentProductLots.find(lot => lot.isInUse)
+          if (inUseLot) {
+            const newAmount = (inUseLot.currentAmount ?? 0) - relatedUsage.amount
+            if (newAmount <= 0 && relatedProduct.lotQuantity > 0) {
+              // 現在のロットを使い切り状態に更新
+              await tx.productLot.update({
+                where: { id: inUseLot.id },
+                data: {
+                  currentAmount: 0,
+                  isInUse: false
+                }
+              })
+
+              // 新しいロットを使用開始
+              const newLot = await tx.productLot.findFirst({
+                where: {
+                  productId: relatedProduct.id,
+                  isInUse: false
+                }
+              })
+
+              if (newLot) {
+                await tx.productLot.update({
+                  where: { id: newLot.id },
+                  data: {
+                    isInUse: true,
+                    currentAmount: relatedProduct.capacity,
+                    startedAt: new Date()
+                  }
+                })
+              }
+
+              await tx.product.update({
+                where: { id: relatedProduct.id },
+                data: {
+                  lotQuantity: {
+                    decrement: 1
+                  }
+                }
+              })
+            } else {
+              // 現在のロットの残量を更新
+              await tx.productLot.update({
+                where: { id: inUseLot.id },
+                data: {
+                  currentAmount: newAmount
+                }
+              })
+            }
+          }
+        }
       }
 
+      // 統計情報の更新
+      const averageUses = await calculateAverageUses(tx, mainProduct.id)
+      await tx.product.update({
+        where: { id: mainProduct.id },
+        data: {
+          usageCount: { increment: 1 },
+          lastUsed: new Date(),
+          averageUsesPerMonth: averageUses
+        }
+      })
+    
       return newUsage
     })
 

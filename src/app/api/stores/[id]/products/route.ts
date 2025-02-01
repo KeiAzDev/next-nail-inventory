@@ -1,4 +1,3 @@
-//app/api/stores/[id]/products/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
@@ -14,7 +13,6 @@ export async function GET(
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
-    // paramsそのものを非同期で解決
     const resolvedParams = await context.params
     const storeId = resolvedParams.id
     
@@ -24,6 +22,9 @@ export async function GET(
 
     const products = await prisma.product.findMany({
       where: { storeId },
+      include: {
+        currentProductLots: true  // ロット情報も取得
+      },
       orderBy: {
         updatedAt: 'desc'
       }
@@ -49,7 +50,6 @@ export async function POST(
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
-    // paramsそのものを非同期で解決
     const resolvedParams = await context.params
     const storeId = resolvedParams.id
     
@@ -62,17 +62,64 @@ export async function POST(
     }
 
     const body = await request.json()
-    const product = await prisma.product.create({
-      data: {
-        ...body,
-        storeId,
-        usageCount: 0,
-        estimatedDaysLeft: null,
-        averageUsesPerMonth: null
+
+    // トランザクションで商品とロットを作成
+    const result = await prisma.$transaction(async (tx) => {
+      // 商品の作成
+      const product = await tx.product.create({
+        data: {
+          brand: body.brand,
+          productName: body.productName,
+          colorCode: body.colorCode,
+          colorName: body.colorName,
+          type: body.type,
+          price: body.price,
+          capacity: body.capacity,
+          capacityUnit: body.capacityUnit,
+          averageUsePerService: body.averageUsePerService,
+          minStockAlert: body.minStockAlert,
+          recommendedAlertPercentage: body.recommendedAlertPercentage,
+          // ロット管理用フィールド
+          totalQuantity: body.quantity,
+          lotQuantity: body.quantity - 1,
+          inUseQuantity: 1,
+          // その他の初期値
+          usageCount: 0,
+          estimatedDaysLeft: null,
+          averageUsesPerMonth: null,
+          storeId: storeId,
+        }
+      })
+
+      // 使用中ロットの作成
+      const inUseLot = await tx.productLot.create({
+        data: {
+          productId: product.id,
+          isInUse: true,
+          currentAmount: body.capacity || null,
+          startedAt: new Date()
+        }
+      })
+
+      // 未使用ロットの作成（quantity - 1個）
+      if (body.quantity > 1) {
+        const unusedLots = Array(body.quantity - 1).fill(null).map(() => ({
+          productId: product.id,
+          isInUse: false
+        }))
+
+        await tx.productLot.createMany({
+          data: unusedLots
+        })
+      }
+
+      return {
+        ...product,
+        lots: [inUseLot]
       }
     })
 
-    return NextResponse.json(product)
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Product creation error:', error)
     return NextResponse.json(

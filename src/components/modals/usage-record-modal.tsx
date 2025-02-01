@@ -1,7 +1,6 @@
-//src/components/modals/usage-record-modal.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
@@ -29,6 +28,7 @@ interface UsageRecordModalProps {
   storeId: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  selectedProduct?: Product
 }
 
 interface UsageFormData {
@@ -62,6 +62,7 @@ export default function UsageRecordModal({
   storeId,
   open,
   onOpenChange,
+  selectedProduct,
 }: UsageRecordModalProps) {
   const [formData, setFormData] = useState<UsageFormData>(initialFormData)
   const queryClient = useQueryClient()
@@ -74,7 +75,7 @@ export default function UsageRecordModal({
   } = useQuery<ServiceType[]>({
     queryKey: ['serviceTypes', storeId],
     queryFn: () => fetchServiceTypes(storeId),
-    enabled: open, // モーダルが開いている時のみ実行
+    enabled: open,
   })
 
   // 商品の取得
@@ -85,23 +86,87 @@ export default function UsageRecordModal({
   } = useQuery<Product[]>({
     queryKey: ['products', storeId],
     queryFn: () => fetchStoreProducts(storeId),
-    enabled: open, // モーダルが開いている時のみ実行
+    enabled: open,
   })
 
+  // フィルタリング関数
+  const getFilteredServiceTypes = useCallback(() => {
+    if (!serviceTypes?.length || !selectedProduct) return [];
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.group('Service Types Filtering');
+      console.log('Product:', {
+        name: selectedProduct.productName,
+        type: selectedProduct.type
+      });
+    }
+
+    const filtered = serviceTypes.filter(type => type.productType === selectedProduct.type);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Filtered Service Types:', filtered.map(t => ({
+        name: t.name,
+        type: t.productType
+      })));
+      console.groupEnd();
+    }
+
+    return filtered;
+  }, [serviceTypes, selectedProduct]);
+
+  // モーダルが開かれたときの初期化処理
+  useEffect(() => {
+    if (!open) return;
+
+    if (selectedProduct) {
+      const filtered = getFilteredServiceTypes();
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Modal Opened:', {
+          product: selectedProduct.productName,
+          availableTypes: filtered.map(t => t.name)
+        });
+      }
+
+      // 適切な施術タイプを選択
+      if (filtered.length === 1) {
+        const serviceType = filtered[0];
+        setFormData({
+          ...initialFormData,
+          serviceTypeId: serviceType.id,
+          mainProduct: {
+            productId: selectedProduct.id,
+            amount: serviceType.defaultUsageAmount
+          }
+        });
+      } else {
+        setFormData({
+          ...initialFormData,
+          mainProduct: {
+            productId: selectedProduct.id,
+            amount: 0
+          }
+        });
+      }
+    } else {
+      setFormData(initialFormData);
+    }
+  }, [open, selectedProduct, getFilteredServiceTypes]);
+
   // 使用記録の登録
-  const { mutate, isPending } = useMutation({
+  const { mutate: submitUsage, isPending } = useMutation({
     mutationFn: (data: UsageFormData) => recordUsage(storeId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products', storeId] })
       queryClient.invalidateQueries({ queryKey: ['usages', storeId] })
       onOpenChange(false)
-      setFormData(initialFormData)
       toast({
         title: '使用記録を登録しました',
         description: '使用記録の登録が完了しました。',
       })
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Usage record error:', error);
       toast({
         variant: 'destructive',
         title: 'エラー',
@@ -111,110 +176,118 @@ export default function UsageRecordModal({
   })
 
   // サービスタイプ選択時の処理
-  const handleServiceTypeChange = (serviceTypeId: string) => {
-    const serviceType = serviceTypes?.find((type) => type.id === serviceTypeId)
-    if (!serviceType) return
+  const handleServiceTypeChange = useCallback((serviceTypeId: string) => {
+    const serviceType = serviceTypes?.find((type) => type.id === serviceTypeId);
+    if (!serviceType) return;
 
-    // メイン商品の使用量を設定
-    const defaultAmount = serviceType.defaultUsageAmount
-    
-    // 関連商品の設定（ベース、トップなど）
-    const relatedProducts = serviceType.serviceTypeProducts
-      .filter((stp) => stp.isRequired)
-      .map((stp) => ({
-        productId: stp.productId,
-        amount: stp.usageAmount,
-      }))
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Service Type Selected:', {
+        name: serviceType.name,
+        defaultAmount: serviceType.defaultUsageAmount
+      });
+    }
 
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
       serviceTypeId,
       mainProduct: {
         ...prev.mainProduct,
-        amount: defaultAmount,
+        amount: serviceType.defaultUsageAmount
       },
-      relatedProducts,
-    }))
-  }
+      relatedProducts: serviceType.serviceTypeProducts
+        .filter(stp => stp.isRequired)
+        .map(stp => ({
+          productId: stp.productId,
+          amount: stp.usageAmount
+        }))
+    }));
+  }, [serviceTypes]);
 
   // 爪の長さによる使用量の調整
-  const handleNailLengthChange = (nailLength: NailLength) => {
+  const handleNailLengthChange = useCallback((nailLength: NailLength) => {
     const serviceType = serviceTypes?.find(
-      (type) => type.id === formData.serviceTypeId
-    )
-    if (!serviceType) return
+      type => type.id === formData.serviceTypeId
+    );
+    if (!serviceType) return;
 
-    const getLengthRate = (length: NailLength) => {
+    const getLengthRate = (length: NailLength): number => {
       switch (length) {
-        case 'SHORT': return serviceType.shortLengthRate
-        case 'MEDIUM': return serviceType.mediumLengthRate
-        case 'LONG': return serviceType.longLengthRate
+        case 'SHORT': return serviceType.shortLengthRate;
+        case 'MEDIUM': return serviceType.mediumLengthRate;
+        case 'LONG': return serviceType.longLengthRate;
       }
-    }
+    };
 
-    const rate = getLengthRate(nailLength) / 100
+    const rate = getLengthRate(nailLength) / 100;
+    const mainAmount = serviceType.defaultUsageAmount * rate;
 
-    // メイン商品の使用量を調整
-    const mainAmount = serviceType.defaultUsageAmount * rate
-
-    // 関連商品の使用量を調整
-    const relatedProducts = formData.relatedProducts.map((rp) => {
-      const serviceTypeProduct = serviceType.serviceTypeProducts.find(
-        (stp) => stp.productId === rp.productId
-      )
+    const relatedProducts = formData.relatedProducts.map(rp => {
+      const stp = serviceType.serviceTypeProducts.find(
+        stp => stp.productId === rp.productId
+      );
       return {
         ...rp,
-        amount: serviceTypeProduct
-          ? serviceTypeProduct.usageAmount * rate
-          : rp.amount,
-      }
-    })
+        amount: stp ? stp.usageAmount * rate : rp.amount,
+      };
+    });
 
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
       nailLength,
       mainProduct: {
         ...prev.mainProduct,
-        amount: mainAmount,
+        amount: mainAmount
       },
       relatedProducts,
-    }))
-  }
+    }));
+  }, [formData.serviceTypeId, formData.relatedProducts, serviceTypes]);
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    mutate(formData)
-  }
+    e.preventDefault();
+    submitUsage(formData);
+  };
 
   // ローディング状態の表示
-  const LoadingDialog = () => (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>使用記録</DialogTitle>
+  if (isLoadingServiceTypes || isLoadingProducts) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>使用記録</DialogTitle>
+            <DialogDescription>
+              データを読み込んでいます...
+            </DialogDescription>
+          </DialogHeader>
           <div className="w-full h-40 flex items-center justify-center">
             <div className="animate-pulse">Loading...</div>
           </div>
-        </DialogHeader>
-      </DialogContent>
-    </Dialog>
-  )
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   // エラー状態の表示
-  const ErrorDialog = () => (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>使用記録</DialogTitle>
-        </DialogHeader>
-        <Alert variant="destructive">
-          <AlertDescription>
-            データの取得に失敗しました。再度お試しください。
-          </AlertDescription>
-        </Alert>
-      </DialogContent>
-    </Dialog>
-  )
+  if (serviceTypesError || productsError) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>使用記録</DialogTitle>
+            <DialogDescription>
+              エラーが発生しました
+            </DialogDescription>
+          </DialogHeader>
+          <Alert variant="destructive">
+            <AlertDescription>
+              データの取得に失敗しました。再度お試しください。
+            </AlertDescription>
+          </Alert>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  const availableServiceTypes = getFilteredServiceTypes();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -224,9 +297,13 @@ export default function UsageRecordModal({
             使用記録
           </DialogTitle>
           <DialogDescription className="text-gray-600">
-            施術での商品使用記録を入力してください。
+            {selectedProduct ? 
+              `${selectedProduct.brand} ${selectedProduct.productName}の使用記録を入力してください。` :
+              '施術での商品使用記録を入力してください。'
+            }
           </DialogDescription>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-4 px-1 pb-4">
           <div className="space-y-4">
             <div className="grid w-full gap-1.5">
@@ -236,16 +313,23 @@ export default function UsageRecordModal({
               <Select
                 value={formData.serviceTypeId}
                 onValueChange={handleServiceTypeChange}
+                disabled={availableServiceTypes.length === 1}
               >
                 <SelectTrigger className="bg-white border-gray-200 text-gray-800">
                   <SelectValue placeholder="施術タイプを選択" />
                 </SelectTrigger>
                 <SelectContent className="bg-white">
-                  {serviceTypes?.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      {type.name}
+                  {availableServiceTypes.length === 0 ? (
+                    <SelectItem value="" disabled>
+                      選択可能な施術タイプがありません
                     </SelectItem>
-                  ))}
+                  ) : (
+                    availableServiceTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -256,9 +340,7 @@ export default function UsageRecordModal({
               </Label>
               <Select
                 value={formData.nailLength}
-                onValueChange={(value: NailLength) =>
-                  handleNailLengthChange(value)
-                }
+                onValueChange={handleNailLengthChange}
               >
                 <SelectTrigger className="bg-white border-gray-200 text-gray-800">
                   <SelectValue placeholder="爪の長さを選択" />
@@ -313,7 +395,7 @@ export default function UsageRecordModal({
             </Button>
             <Button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || !formData.serviceTypeId}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {isPending ? '登録中...' : '登録'}
@@ -322,5 +404,5 @@ export default function UsageRecordModal({
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

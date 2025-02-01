@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import type { ServiceType } from '@/types/api'
 
+
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> | { id: string } }
@@ -23,9 +25,20 @@ export async function GET(
     }
 
     const serviceTypes = await prisma.serviceType.findMany({
-      where: { storeId },
+      where: { 
+        storeId,
+      },
       include: {
         serviceTypeProducts: {
+          where: {
+            product: {
+              storeId,
+              // 削除された商品を除外
+              NOT: {
+                id: undefined
+              }
+            }
+          },
           include: {
             product: true
           }
@@ -36,9 +49,51 @@ export async function GET(
       }
     })
 
-    return NextResponse.json(serviceTypes)
+    const formattedServiceTypes: ServiceType[] = serviceTypes.map(st => ({
+      id: st.id,
+      name: st.name,
+      defaultUsageAmount: st.defaultUsageAmount,
+      productType: st.productType,
+      shortLengthRate: st.shortLengthRate,
+      mediumLengthRate: st.mediumLengthRate,
+      longLengthRate: st.longLengthRate,
+      allowCustomAmount: st.allowCustomAmount,
+      storeId: st.storeId,
+      createdAt: st.createdAt.toISOString(),
+      updatedAt: st.updatedAt.toISOString(),
+      serviceTypeProducts: st.serviceTypeProducts
+        .filter(stp => stp.product !== null)
+        .map(stp => ({
+          id: stp.id,
+          serviceTypeId: stp.serviceTypeId,
+          productId: stp.productId,
+          usageAmount: stp.usageAmount,
+          isRequired: stp.isRequired,
+          createdAt: stp.createdAt.toISOString(),
+          updatedAt: stp.updatedAt.toISOString(),
+          product: stp.product ? {
+            ...stp.product,
+            totalQuantity: stp.product.totalQuantity || 0,
+            inUseQuantity: stp.product.inUseQuantity || 0,
+            lotQuantity: stp.product.lotQuantity || 0,
+            createdAt: stp.product.createdAt.toISOString(),
+            updatedAt: stp.product.updatedAt.toISOString(),
+            lastUsed: stp.product.lastUsed?.toISOString() || null,
+            capacity: stp.product.capacity,
+            capacityUnit: stp.product.capacityUnit,
+            averageUsePerService: stp.product.averageUsePerService,
+            averageUsesPerMonth: stp.product.averageUsesPerMonth,
+            estimatedDaysLeft: stp.product.estimatedDaysLeft
+          } : undefined
+        }))
+    }))
+
+    return NextResponse.json({ serviceTypes: formattedServiceTypes })
+
   } catch (error) {
-    console.error('ServiceTypes fetch error:', error)
+    const errorMessage = error instanceof Error ? error.message : '予期せぬエラーが発生しました'
+    console.error('ServiceTypes fetch error:', errorMessage)
+    
     return NextResponse.json(
       { error: '施術タイプの取得に失敗しました' },
       { status: 500 }

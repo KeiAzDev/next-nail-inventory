@@ -21,6 +21,7 @@ export type Store = {
 
 export type ProductType = 'POLISH' | 'GEL_COLOR' | 'GEL_BASE' | 'GEL_TOP'
 
+// @/types/api.ts の Product 型を修正
 export type Product = {
   id: string
   brand: string
@@ -29,21 +30,36 @@ export type Product = {
   colorName: string
   type: ProductType
   price: number
-  quantity: number
+  // quantity を削除（totalQuantity に置き換え）
   // 容量関連フィールド
-  capacity?: number
-  capacityUnit?: string
-  averageUsePerService?: number
+  capacity: number | null
+  capacityUnit: string | null
+  averageUsePerService: number | null
   recommendedAlertPercentage: number
   // 既存のフィールド
   usageCount: number
-  lastUsed?: string
-  averageUsesPerMonth?: number
-  estimatedDaysLeft?: number
+  lastUsed: string | null
+  averageUsesPerMonth: number | null
+  estimatedDaysLeft: number | null
   minStockAlert: number
   storeId: string
   createdAt: string
   updatedAt: string
+  // 新規フィールド
+  totalQuantity: number
+  inUseQuantity: number
+  lotQuantity: number
+  lots?: ProductLot[]
+}
+
+export interface ProductLot {
+  id: string
+  productId: string
+  isInUse: boolean
+  currentAmount?: number
+  startedAt?: Date
+  createdAt: Date
+  updatedAt: Date
 }
 
 export type StaffMember = {
@@ -81,6 +97,7 @@ export type ServiceTypeProduct = {
   isRequired: boolean
   createdAt: string
   updatedAt: string
+  product?: Product
 }
 
 export type Usage = {

@@ -48,7 +48,8 @@ export async function fetchServiceTypes(storeId: string): Promise<ServiceType[]>
   if (!response.ok) {
     throw new Error('Failed to fetch service types')
   }
-  return response.json()
+  const data = await response.json()
+  return data.serviceTypes // オブジェクトから配列を取得
 }
 
 export async function recordUsage(
@@ -94,5 +95,13 @@ export async function createServiceType(storeId: string, data: any): Promise<Ser
     throw new Error('Failed to create service type')
   }
   
+  return response.json()
+}
+
+export async function fetchProductDetails(storeId: string, productId: string): Promise<Product> {
+  const response = await fetch(`/api/stores/${storeId}/products/${productId}`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch product details')
+  }
   return response.json()
 }
