@@ -1,94 +1,118 @@
 'use client'
 
-import { signIn, getSession } from 'next-auth/react'
-import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/ui/use-toast'
+import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 export default function SignIn() {
-  const router = useRouter()
-  const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setError(null)
     setIsLoading(true)
 
     const formData = new FormData(e.currentTarget)
+    const storeCode = formData.get('storeCode') as string
     const email = formData.get('email') as string
     const password = formData.get('password') as string
 
     try {
       const result = await signIn('credentials', {
+        storeCode,
         email,
         password,
-        redirect: false,
+        redirect: false
       })
 
       if (result?.error) {
-        setError('メールアドレスまたはパスワードが正しくありません')
+        toast({
+          title: 'エラー',
+          description: '認証に失敗しました。入力内容を確認してください。',
+          variant: 'destructive',
+        })
         return
       }
 
-      const session = await getSession()
-      if (session?.user?.storeId) {
-        router.push(`/stores/${session.user.storeId}`)
+      // 認証成功後、該当店舗のダッシュボードへリダイレクト
+      const session = await fetch('/api/auth/session')
+      const sessionData = await session.json()
+      
+      if (sessionData?.user?.storeId) {
+        router.push(`/stores/${sessionData.user.storeId}`)
         router.refresh()
       } else {
-        setError('店舗情報の取得に失敗しました')
+        toast({
+          title: 'エラー',
+          description: '店舗情報の取得に失敗しました',
+          variant: 'destructive',
+        })
       }
     } catch (error) {
-      setError('エラーが発生しました')
+      toast({
+        title: 'エラー',
+        description: 'エラーが発生しました。時間をおいて再度お試しください。',
+        variant: 'destructive',
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            サインイン
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <input
-                name="email"
-                type="email"
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-lg text-gray-800">
+        <CardHeader>
+          <CardTitle className="text-2xl">店舗ログイン</CardTitle>
+          <CardDescription>
+            店舗コード、メールアドレス、パスワードを入力してください
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="storeCode">店舗コード</Label>
+              <Input
+                id="storeCode"
+                name="storeCode"
+                placeholder="例：STORE001"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="メールアドレス"
+                autoComplete="off"
               />
             </div>
-            <div>
-              <input
+            <div className="space-y-2">
+              <Label htmlFor="email">メールアドレス</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="example@example.com"
+                required
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">パスワード</Label>
+              <Input
+                id="password"
                 name="password"
                 type="password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="パスワード"
+                autoComplete="current-password"
               />
             </div>
-          </div>
-
-          {error && (
-            <div className="text-red-500 text-sm text-center">{error}</div>
-          )}
-
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400"
-            >
+            <Button className="w-full" type="submit" disabled={isLoading}>
               {isLoading ? 'ログイン中...' : 'ログイン'}
-            </button>
-          </div>
-        </form>
-      </div>
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }

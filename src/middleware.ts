@@ -6,7 +6,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   
   // 認証不要のパスを定義
-  const publicPaths = ['/signin', '/signup']
+  const publicPaths = ['/signin', '/signup', '/staff-signup']
   if (publicPaths.includes(pathname)) {
     return NextResponse.next()
   }
