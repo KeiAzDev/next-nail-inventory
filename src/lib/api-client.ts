@@ -1,4 +1,4 @@
-import type { Store, Product, StaffMember, ServiceType, Usage, NailLength } from '@/types/api'
+import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
   const response = await fetch(`/api/stores/${storeId}`)
@@ -113,5 +113,58 @@ export async function deleteProduct(storeId: string, productId: string): Promise
   
   if (!response.ok) {
     throw new Error('Failed to delete product')
+  }
+}
+
+export async function createStaffInvitation(
+  storeId: string,
+  data: CreateInvitationRequest
+): Promise<CreateInvitationResponse> {
+  const response = await fetch(`/api/stores/${storeId}/invitations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to create staff invitation')
+  }
+  
+  return response.json()
+}
+
+export async function validateInvitation(token: string): Promise<Invitation> {
+  const response = await fetch(`/api/stores/invitations/validate?token=${token}`)
+  
+  if (!response.ok) {
+    throw new Error('Invalid or expired invitation token')
+  }
+  
+  return response.json()
+}
+
+export async function getStoreInvitations(storeId: string): Promise<Invitation[]> {
+  const response = await fetch(`/api/stores/${storeId}/invitations`)
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch invitations')
+  }
+  
+  return response.json()
+}
+
+export async function deleteInvitation(storeId: string, token: string): Promise<void> {
+  const response = await fetch(`/api/stores/${storeId}/invitations`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token })
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to delete invitation')
   }
 }

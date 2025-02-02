@@ -1,3 +1,4 @@
+//src/components/forms/staff-registration.tsx
 'use client'
 
 import { useState } from 'react'

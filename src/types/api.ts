@@ -6,6 +6,7 @@ export type QueryKeys = {
   staff: ['staff', string]
   serviceTypes: ['serviceTypes', string]
   usages: ['usages', string]
+  invitations: ['invitations', string]
 }
 
 export type Store = {
@@ -135,4 +136,49 @@ export type CreateUsageRequest = {
   serviceTypeId: string
   nailLength: NailLength
   note?: string
+}
+
+// 既存の型定義に追加
+
+export type Invitation = {
+  id: string
+  token: string
+  email?: string | null
+  storeId: string
+  role: 'ADMIN' | 'MANAGER' | 'STAFF'
+  expires: string
+  used: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type CreateInvitationRequest = {
+  email?: string
+  role?: 'ADMIN' | 'MANAGER' | 'STAFF'
+}
+
+export type CreateInvitationResponse = {
+  invitation: Invitation
+  inviteUrl: string
+}
+
+export type GetInvitationsResponse = {
+  invitations: Invitation[]
+}
+
+// 招待トークン検証のレスポンス
+export type ValidateInvitationResponse = {
+  isValid: boolean
+  invitation?: {
+    storeId: string
+    storeName: string
+    role: 'ADMIN' | 'MANAGER' | 'STAFF'
+    email: string | null
+  }
+  error?: string
+}
+
+// 招待削除のリクエスト
+export type DeleteInvitationRequest = {
+  token: string
 }

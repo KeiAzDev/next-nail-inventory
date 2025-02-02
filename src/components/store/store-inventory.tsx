@@ -128,14 +128,13 @@ export default function StoreInventory({ storeId }: StoreInventoryProps) {
             <CardTitle>在庫管理</CardTitle>
             <div className="flex gap-2">
               <Button 
-                variant="outline"
                 onClick={() => setShowUsageModal(true)}
-                className="bg-white hover:bg-gray-100"
+                className="hover:bg-white"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 使用記録
               </Button>
-              <Button onClick={() => setShowAddModal(true)}>
+              <Button className="hover:bg-white" onClick={() => setShowAddModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 商品登録
               </Button>

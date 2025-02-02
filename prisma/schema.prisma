@@ -43,6 +43,7 @@ model Store {
   products      Product[]
   users         User[]    
   serviceTypes  ServiceType[]
+  invitations   Invitation[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -205,4 +206,17 @@ model RelatedProductUsage {
   usedLotId    String?    @db.ObjectId
   
   createdAt     DateTime  @default(now())
+}
+
+model Invitation {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  token       String    @unique
+  email       String?
+  storeId     String    @db.ObjectId
+  store       Store     @relation(fields: [storeId], references: [id])
+  role        Role      @default(STAFF)
+  expires     DateTime
+  used        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }

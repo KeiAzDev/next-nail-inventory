@@ -21,6 +21,7 @@
     "@tanstack/react-query-devtools": "^5.65.0",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
+    "date-fns": "^4.1.0",
     "lucide-react": "^0.474.0",
     "next": "15.1.6",
     "react": "^19.0.0",
