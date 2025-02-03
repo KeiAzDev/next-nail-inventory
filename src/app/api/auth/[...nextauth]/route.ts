@@ -1,3 +1,4 @@
+//src/app/api/auth/[...nextauth]/route.ts
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { NextAuthOptions } from 'next-auth'
 import NextAuth from 'next-auth/next'

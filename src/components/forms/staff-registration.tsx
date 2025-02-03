@@ -1,4 +1,3 @@
-//src/components/forms/staff-registration.tsx
 'use client'
 
 import { useState } from 'react'
@@ -19,15 +18,23 @@ interface FormErrors {
 }
 
 interface StaffRegistrationFormProps {
-  store: Store
+  store: Store;
+  invitationToken: string | null;
+  invitedEmail: string | null;
+  invitedRole: 'ADMIN' | 'MANAGER' | 'STAFF';
 }
 
-export default function StaffRegistrationForm({ store }: StaffRegistrationFormProps) {
+export default function StaffRegistrationForm({ 
+  store, 
+  invitationToken, 
+  invitedEmail, 
+  invitedRole 
+}: StaffRegistrationFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState<FormData>({
     name: '',
-    email: '',
+    email: invitedEmail || '',
     password: '',
     confirmPassword: ''
   })
@@ -58,6 +65,10 @@ export default function StaffRegistrationForm({ store }: StaffRegistrationFormPr
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
+    // 招待メールアドレスが存在する場合はメールアドレスの変更を禁止
+    if (name === 'email' && invitedEmail) {
+      return
+    }
     setFormData(prev => ({ ...prev, [name]: value }))
     if (errors[name]) {
       setErrors(prev => {
@@ -88,7 +99,7 @@ export default function StaffRegistrationForm({ store }: StaffRegistrationFormPr
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          storeId: store.id
+          token: invitationToken
         })
       })
 
@@ -142,7 +153,7 @@ export default function StaffRegistrationForm({ store }: StaffRegistrationFormPr
             name="name"
             value={formData.name}
             onChange={handleChange}
-            className={`mt-1 block w-full rounded-md ${
+            className={`mt-1 block text-gray-800 w-full rounded-md ${
               errors.name ? 'border-red-300' : 'border-gray-300'
             } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
           />
@@ -161,9 +172,12 @@ export default function StaffRegistrationForm({ store }: StaffRegistrationFormPr
             name="email"
             value={formData.email}
             onChange={handleChange}
-            className={`mt-1 block w-full rounded-md ${
+            disabled={!!invitedEmail}
+            className={`mt-1 block text-gray-800 w-full rounded-md ${
               errors.email ? 'border-red-300' : 'border-gray-300'
-            } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
+            } shadow-sm focus:border-indigo-500 focus:ring-indigo-500 ${
+              invitedEmail ? 'bg-gray-100' : ''
+            }`}
           />
           {errors.email && (
             <p className="mt-1 text-sm text-red-600">{errors.email}</p>
@@ -180,7 +194,7 @@ export default function StaffRegistrationForm({ store }: StaffRegistrationFormPr
             name="password"
             value={formData.password}
             onChange={handleChange}
-            className={`mt-1 block w-full rounded-md ${
+            className={`mt-1 block text-gray-800 w-full rounded-md ${
               errors.password ? 'border-red-300' : 'border-gray-300'
             } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
           />
@@ -199,7 +213,7 @@ export default function StaffRegistrationForm({ store }: StaffRegistrationFormPr
             name="confirmPassword"
             value={formData.confirmPassword}
             onChange={handleChange}
-            className={`mt-1 block w-full rounded-md ${
+            className={`mt-1 block text-gray-800 w-full rounded-md ${
               errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
             } shadow-sm focus:border-indigo-500 focus:ring-indigo-500`}
           />

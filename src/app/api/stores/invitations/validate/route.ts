@@ -1,22 +1,30 @@
 // src/app/api/stores/invitations/validate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { validateInvitationToken, createErrorResponse } from '@/lib/invitation';
+import type { ValidateInvitationResponse } from '@/types/api';
 
 export async function GET(req: NextRequest) {
   try {
     const token = req.nextUrl.searchParams.get('token');
 
     if (!token) {
-      return createErrorResponse(new Error('トークンが指定されていません'), 400);
+      return NextResponse.json<ValidateInvitationResponse>({
+        isValid: false,
+        error: 'トークンが指定されていません'
+      }, { status: 400 });
     }
 
     const { isValid, invitation, error } = await validateInvitationToken(token);
 
-    if (!isValid) {
-      return createErrorResponse(new Error(error || '無効なトークンです'), 400);
+    if (!isValid || !invitation) {
+      return NextResponse.json<ValidateInvitationResponse>({
+        isValid: false,
+        error: error || '無効なトークンです'
+      }, { status: 400 });
     }
 
-    return NextResponse.json({
+    return NextResponse.json<ValidateInvitationResponse>({
+      isValid: true,
       invitation: {
         storeId: invitation.store.id,
         storeName: invitation.store.name,
@@ -24,8 +32,12 @@ export async function GET(req: NextRequest) {
         email: invitation.email
       }
     });
+
   } catch (error) {
     console.error('トークン検証エラー:', error);
-    return createErrorResponse(error as Error);
+    return NextResponse.json<ValidateInvitationResponse>({
+      isValid: false,
+      error: '検証中にエラーが発生しました'
+    }, { status: 500 });
   }
 }

@@ -1,4 +1,4 @@
-import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation } from '@/types/api'
+import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
   const response = await fetch(`/api/stores/${storeId}`)
@@ -135,7 +135,7 @@ export async function createStaffInvitation(
   return response.json()
 }
 
-export async function validateInvitation(token: string): Promise<Invitation> {
+export async function validateInvitation(token: string): Promise<ValidateInvitationResponse> {
   const response = await fetch(`/api/stores/invitations/validate?token=${token}`)
   
   if (!response.ok) {
