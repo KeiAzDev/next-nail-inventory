@@ -152,7 +152,8 @@ export async function getStoreInvitations(storeId: string): Promise<Invitation[]
     throw new Error('Failed to fetch invitations')
   }
   
-  return response.json()
+  const data = await response.json()
+  return data.invitations  // レスポンスから invitations 配列を取り出す
 }
 
 export async function deleteInvitation(storeId: string, token: string): Promise<void> {
