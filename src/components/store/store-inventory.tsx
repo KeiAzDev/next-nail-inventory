@@ -11,8 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Search, Plus, AlertTriangle } from 'lucide-react'
 import AddProductModal from '@/components/modals/product-modal'
-import UsageRecordModal from '@/components/modals/usage-record-modal'
 import Link from 'next/link'
+import InventoryUsageRecordModal from '../modals/inventory-usage-record-modal'
 
 interface StoreInventoryProps {
   storeId: string
@@ -217,7 +217,7 @@ export default function StoreInventory({ storeId }: StoreInventoryProps) {
         onOpenChange={setShowAddModal}
       />
 
-      <UsageRecordModal
+      <InventoryUsageRecordModal
         storeId={storeId}
         open={showUsageModal}
         onOpenChange={setShowUsageModal}

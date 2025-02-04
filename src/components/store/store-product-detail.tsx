@@ -1,123 +1,147 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-import { useToast } from '@/components/ui/use-toast'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { Package2, AlertTriangle } from 'lucide-react'
-import { fetchProductDetails } from '@/lib/api-client'
-import type { Product } from '@/types/api'
-import UsageRecordModal from '@/components/modals/usage-record-modal'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/components/ui/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Package2, AlertTriangle } from "lucide-react";
+import { fetchProductDetails } from "@/lib/api-client";
+import type { Product } from "@/types/api";
+import UsageRecordModal from "@/components/modals/usage-record-modal";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import ProductUsageRecordModal from "../modals/product-usage-record-modal";
 
 interface StoreProductDetailProps {
-  storeId: string
-  productId: string
+  storeId: string;
+  productId: string;
 }
 
 // 商品削除用の関数
-async function deleteProduct(storeId: string, productId: string): Promise<void> {
+async function deleteProduct(
+  storeId: string,
+  productId: string
+): Promise<void> {
   const response = await fetch(`/api/stores/${storeId}/products/${productId}`, {
-    method: 'DELETE',
-  })
-  
+    method: "DELETE",
+  });
+
   if (!response.ok) {
-    throw new Error('商品の削除に失敗しました')
+    throw new Error("商品の削除に失敗しました");
   }
 }
 
-export default function StoreProductDetail({ storeId, productId }: StoreProductDetailProps) {
-  const router = useRouter()
-  const { toast } = useToast()
-  const [showUsageModal, setShowUsageModal] = useState(false)
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+export default function StoreProductDetail({
+  storeId,
+  productId,
+}: StoreProductDetailProps) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [showUsageModal, setShowUsageModal] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const { data: product, error, isLoading } = useQuery<Product>({
-    queryKey: ['product', productId],
-    queryFn: () => fetchProductDetails(storeId, productId)
-  })
+  const {
+    data: product,
+    error,
+    isLoading,
+  } = useQuery<Product>({
+    queryKey: ["product", productId],
+    queryFn: () => fetchProductDetails(storeId, productId),
+  });
 
   // デバッグ情報の出力
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && product) {
-      console.group('Product Detail Debug Info')
-      console.log('Product:', {
+    if (process.env.NODE_ENV === "development" && product) {
+      console.group("Product Detail Debug Info");
+      console.log("Product:", {
         id: product.id,
         type: product.type,
-        name: `${product.brand} ${product.productName}`
-      })
-      console.groupEnd()
+        name: `${product.brand} ${product.productName}`,
+      });
+      console.groupEnd();
     }
-  }, [product])
+  }, [product]);
 
   // 在庫状態の判定
   const getStockStatus = (product: Product) => {
-    const inUseLot = product.lots?.find(lot => lot.isInUse)
-    const currentAmount = inUseLot?.currentAmount ?? 0
-    const hasStock = product.lotQuantity > 0
-    
+    const inUseLot = product.lots?.find((lot) => lot.isInUse);
+    const currentAmount = inUseLot?.currentAmount ?? 0;
+    const hasStock = product.lotQuantity > 0;
+
     if (hasStock) {
       return {
-        color: 'text-green-600',
-        bgColor: 'bg-green-50',
-        label: '在庫あり',
+        color: "text-green-600",
+        bgColor: "bg-green-50",
+        label: "在庫あり",
         description: `未使用: ${product.lotQuantity}個`,
-        showAlert: false
-      }
+        showAlert: false,
+      };
     }
-    
+
     if (currentAmount > 0) {
-      const percentage = (currentAmount / (product.capacity ?? 1)) * 100
+      const percentage = (currentAmount / (product.capacity ?? 1)) * 100;
       if (percentage > product.recommendedAlertPercentage) {
         return {
-          color: 'text-blue-600',
-          bgColor: 'bg-blue-50',
-          label: '使用中',
-          description: `残量: ${currentAmount.toFixed(1)}${product.capacityUnit ?? ''}`,
-          showAlert: false
-        }
+          color: "text-blue-600",
+          bgColor: "bg-blue-50",
+          label: "使用中",
+          description: `残量: ${currentAmount.toFixed(1)}${
+            product.capacityUnit ?? ""
+          }`,
+          showAlert: false,
+        };
       } else {
         return {
-          color: 'text-yellow-600',
-          bgColor: 'bg-yellow-50',
-          label: '残量わずか',
-          description: `残量: ${currentAmount.toFixed(1)}${product.capacityUnit ?? ''}`,
-          showAlert: true
-        }
+          color: "text-yellow-600",
+          bgColor: "bg-yellow-50",
+          label: "残量わずか",
+          description: `残量: ${currentAmount.toFixed(1)}${
+            product.capacityUnit ?? ""
+          }`,
+          showAlert: true,
+        };
       }
     }
 
     return {
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      label: '在庫なし',
-      description: '補充が必要です',
-      showAlert: true
-    }
-  }
+      color: "text-red-600",
+      bgColor: "bg-red-50",
+      label: "在庫なし",
+      description: "補充が必要です",
+      showAlert: true,
+    };
+  };
 
   // 商品削除の処理
   const handleDelete = async () => {
     try {
-      await deleteProduct(storeId, productId)
+      await deleteProduct(storeId, productId);
       toast({
-        title: '商品を削除しました',
-        variant: 'default',
-      })
-      router.push(`/stores/${storeId}/inventory`)
+        title: "商品を削除しました",
+        variant: "default",
+      });
+      router.push(`/stores/${storeId}/inventory`);
     } catch (error) {
       toast({
-        title: '商品の削除に失敗しました',
-        description: error instanceof Error ? error.message : '予期せぬエラーが発生しました',
-        variant: 'destructive',
-      })
+        title: "商品の削除に失敗しました",
+        description:
+          error instanceof Error
+            ? error.message
+            : "予期せぬエラーが発生しました",
+        variant: "destructive",
+      });
     } finally {
-      setShowDeleteDialog(false)
+      setShowDeleteDialog(false);
     }
-  }
+  };
 
   if (isLoading) {
     return (
@@ -132,7 +156,7 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (error) {
@@ -142,22 +166,20 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
           商品情報の取得に失敗しました。再度お試しください。
         </AlertDescription>
       </Alert>
-    )
+    );
   }
 
   if (!product) {
     return (
       <Alert>
-        <AlertDescription>
-          商品が見つかりませんでした。
-        </AlertDescription>
+        <AlertDescription>商品が見つかりませんでした。</AlertDescription>
       </Alert>
-    )
+    );
   }
 
-  const status = getStockStatus(product)
-  const currentLot = product.lots?.find(lot => lot.isInUse)
-  const unusedLots = product.lots?.filter(lot => !lot.isInUse) ?? []
+  const status = getStockStatus(product);
+  const currentLot = product.lots?.find((lot) => lot.isInUse);
+  const unusedLots = product.lots?.filter((lot) => !lot.isInUse) ?? [];
 
   return (
     <>
@@ -201,7 +223,7 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
               <div>
                 <p className="text-sm text-muted-foreground">カラー</p>
                 <div className="flex items-center gap-2">
-                  <div 
+                  <div
                     className="w-4 h-4 rounded-full border"
                     style={{ backgroundColor: product.colorCode }}
                   />
@@ -222,7 +244,9 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
               <Card>
                 <CardContent className="pt-6">
                   <div className="flex justify-between items-center mb-4">
-                    <div className={`px-3 py-1 rounded-full text-sm ${status.bgColor} ${status.color}`}>
+                    <div
+                      className={`px-3 py-1 rounded-full text-sm ${status.bgColor} ${status.color}`}
+                    >
                       {status.label}
                     </div>
                     {status.showAlert && (
@@ -246,12 +270,20 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
                 <CardContent className="pt-6">
                   <div className="space-y-2">
                     <div>
-                      <p className="text-sm text-muted-foreground">現在の在庫数</p>
-                      <p className="text-xl font-semibold">{product.totalQuantity}個</p>
+                      <p className="text-sm text-muted-foreground">
+                        現在の在庫数
+                      </p>
+                      <p className="text-xl font-semibold">
+                        {product.totalQuantity}個
+                      </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">未使用ロット</p>
-                      <p className="text-xl font-semibold">{product.lotQuantity}個</p>
+                      <p className="text-sm text-muted-foreground">
+                        未使用ロット
+                      </p>
+                      <p className="text-xl font-semibold">
+                        {product.lotQuantity}個
+                      </p>
                     </div>
                   </div>
                 </CardContent>
@@ -271,11 +303,18 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">開始日</p>
-                        <p>{new Date(currentLot.startedAt!).toLocaleDateString()}</p>
+                        <p>
+                          {new Date(currentLot.startedAt!).toLocaleDateString()}
+                        </p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">現在の残量</p>
-                        <p>{currentLot.currentAmount}{product.capacityUnit}</p>
+                        <p className="text-sm text-muted-foreground">
+                          現在の残量
+                        </p>
+                        <p>
+                          {currentLot.currentAmount}
+                          {product.capacityUnit}
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">状態</p>
@@ -290,20 +329,36 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
               {unusedLots.length > 0 && (
                 <Card>
                   <CardContent className="pt-6">
-                    <h4 className="font-medium mb-3">未使用ロット {unusedLots.length}個</h4>
+                    <h4 className="font-medium mb-3">
+                      未使用ロット {unusedLots.length}個
+                    </h4>
                     <div className="space-y-3">
-                      {unusedLots.map(lot => (
-                        <div key={lot.id} className="grid grid-cols-3 gap-4 py-2 border-b last:border-0">
+                      {unusedLots.map((lot) => (
+                        <div
+                          key={lot.id}
+                          className="grid grid-cols-3 gap-4 py-2 border-b last:border-0"
+                        >
                           <div>
-                            <p className="text-sm text-muted-foreground">登録日</p>
-                            <p>{new Date(lot.createdAt).toLocaleDateString()}</p>
+                            <p className="text-sm text-muted-foreground">
+                              登録日
+                            </p>
+                            <p>
+                              {new Date(lot.createdAt).toLocaleDateString()}
+                            </p>
                           </div>
                           <div>
-                            <p className="text-sm text-muted-foreground">容量</p>
-                            <p>{product.capacity}{product.capacityUnit}</p>
+                            <p className="text-sm text-muted-foreground">
+                              容量
+                            </p>
+                            <p>
+                              {product.capacity}
+                              {product.capacityUnit}
+                            </p>
                           </div>
                           <div>
-                            <p className="text-sm text-muted-foreground">状態</p>
+                            <p className="text-sm text-muted-foreground">
+                              状態
+                            </p>
                             <p className="text-blue-600">未使用</p>
                           </div>
                         </div>
@@ -317,11 +372,11 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
         </CardContent>
       </Card>
 
-      <UsageRecordModal
+      <ProductUsageRecordModal
         open={showUsageModal}
-        onOpenChange={() => setShowUsageModal(false)}
+        onOpenChange={setShowUsageModal}
         storeId={storeId}
-        selectedProduct={product}
+        product={product}
       />
 
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -343,15 +398,12 @@ export default function StoreProductDetail({ storeId, productId }: StoreProductD
             >
               キャンセル
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-            >
+            <Button variant="destructive" onClick={handleDelete}>
               削除する
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     </>
-  )
+  );
 }

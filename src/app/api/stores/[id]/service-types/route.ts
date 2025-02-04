@@ -54,6 +54,9 @@ export async function GET(
       name: st.name,
       defaultUsageAmount: st.defaultUsageAmount,
       productType: st.productType,
+      isGelService: st.isGelService,
+      requiresBase: st.requiresBase,
+      requiresTop: st.requiresTop,
       shortLengthRate: st.shortLengthRate,
       mediumLengthRate: st.mediumLengthRate,
       longLengthRate: st.longLengthRate,
@@ -69,6 +72,8 @@ export async function GET(
           productId: stp.productId,
           usageAmount: stp.usageAmount,
           isRequired: stp.isRequired,
+          productRole: stp.productRole,
+          order: stp.order,
           createdAt: stp.createdAt.toISOString(),
           updatedAt: stp.updatedAt.toISOString(),
           product: stp.product ? {

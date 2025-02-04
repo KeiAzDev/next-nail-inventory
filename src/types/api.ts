@@ -80,6 +80,9 @@ export type ServiceType = {
   name: string
   defaultUsageAmount: number
   productType: ProductType
+  isGelService: boolean
+  requiresBase: boolean
+  requiresTop: boolean
   shortLengthRate: number
   mediumLengthRate: number
   longLengthRate: number
@@ -96,6 +99,8 @@ export type ServiceTypeProduct = {
   productId: string
   usageAmount: number
   isRequired: boolean
+  productRole?: string | null  // "BASE", "COLOR", "TOP" などの役割を指定
+  order: number        // 使用順序
   createdAt: string
   updatedAt: string
   product?: Product

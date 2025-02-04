@@ -74,7 +74,11 @@ export default function UsageRecordModal({
     isLoading: isLoadingServiceTypes 
   } = useQuery<ServiceType[]>({
     queryKey: ['serviceTypes', storeId],
-    queryFn: () => fetchServiceTypes(storeId),
+    queryFn: async () => {
+      const data = await fetchServiceTypes(storeId);
+      console.log('Fetched Service Types:', data);
+      return data;
+    },
     enabled: open,
   })
 
@@ -91,117 +95,87 @@ export default function UsageRecordModal({
 
   // フィルタリング関数
   const getFilteredServiceTypes = useCallback(() => {
-    if (!serviceTypes?.length || !selectedProduct) return [];
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.group('Service Types Filtering');
-      console.log('Product:', {
-        name: selectedProduct.productName,
-        type: selectedProduct.type
+    if (!serviceTypes?.length || !selectedProduct) {
+      console.log('No service types or selected product', { 
+        hasServiceTypes: !!serviceTypes?.length,
+        selectedProduct 
       });
+      return [];
     }
-
-    const filtered = serviceTypes.filter(type => type.productType === selectedProduct.type);
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Filtered Service Types:', filtered.map(t => ({
-        name: t.name,
-        type: t.productType
-      })));
-      console.groupEnd();
-    }
-
+  
+    console.group('Service Types Filtering Debug');
+    console.log('All Service Types:', serviceTypes.map(t => ({
+      id: t.id,
+      name: t.name,
+      productType: t.productType,
+      isGelService: t.isGelService
+    })));
+    console.log('Selected Product:', {
+      name: selectedProduct.productName,
+      type: selectedProduct.type,
+      id: selectedProduct.id
+    });
+  
+    const filtered = serviceTypes.filter(serviceType => {
+      // 商品タイプがGEL系の場合
+      if (["GEL_BASE", "GEL_TOP", "GEL_COLOR"].includes(selectedProduct.type)) {
+        // isGelServiceがtrueのサービスタイプのみを許可
+        return serviceType.isGelService;
+      }
+  
+      // POLISHの場合
+      if (selectedProduct.type === "POLISH") {
+        return !serviceType.isGelService;
+      }
+  
+      return false;
+    });
+  
+    console.log('Filtered Results:', filtered.map(t => ({
+      name: t.name,
+      isGelService: t.isGelService
+    })));
+    console.groupEnd();
+  
     return filtered;
   }, [serviceTypes, selectedProduct]);
-
-  // モーダルが開かれたときの初期化処理
-  useEffect(() => {
-    if (!open) return;
-
-    if (selectedProduct) {
-      const filtered = getFilteredServiceTypes();
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Modal Opened:', {
-          product: selectedProduct.productName,
-          availableTypes: filtered.map(t => t.name)
-        });
-      }
-
-      // 適切な施術タイプを選択
-      if (filtered.length === 1) {
-        const serviceType = filtered[0];
-        setFormData({
-          ...initialFormData,
-          serviceTypeId: serviceType.id,
-          mainProduct: {
-            productId: selectedProduct.id,
-            amount: serviceType.defaultUsageAmount
-          }
-        });
-      } else {
-        setFormData({
-          ...initialFormData,
-          mainProduct: {
-            productId: selectedProduct.id,
-            amount: 0
-          }
-        });
-      }
-    } else {
-      setFormData(initialFormData);
-    }
-  }, [open, selectedProduct, getFilteredServiceTypes]);
-
-  // 使用記録の登録
-  const { mutate: submitUsage, isPending } = useMutation({
-    mutationFn: (data: UsageFormData) => recordUsage(storeId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products', storeId] })
-      queryClient.invalidateQueries({ queryKey: ['usages', storeId] })
-      onOpenChange(false)
-      toast({
-        title: '使用記録を登録しました',
-        description: '使用記録の登録が完了しました。',
-      })
-    },
-    onError: (error) => {
-      console.error('Usage record error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'エラー',
-        description: '使用記録の登録に失敗しました。',
-      })
-    },
-  })
 
   // サービスタイプ選択時の処理
   const handleServiceTypeChange = useCallback((serviceTypeId: string) => {
     const serviceType = serviceTypes?.find((type) => type.id === serviceTypeId);
-    if (!serviceType) return;
+    if (!serviceType || !selectedProduct) return;
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Service Type Selected:', {
-        name: serviceType.name,
-        defaultAmount: serviceType.defaultUsageAmount
-      });
-    }
+    console.log('Service Type Selected:', {
+      name: serviceType.name,
+      isGelService: serviceType.isGelService,
+      defaultAmount: serviceType.defaultUsageAmount,
+      serviceTypeProducts: serviceType.serviceTypeProducts
+    });
+
+    // メイン商品の使用量を設定
+    const mainAmount = serviceType.defaultUsageAmount;
+
+    // 関連商品の設定
+    const relatedProducts = serviceType.serviceTypeProducts
+      .filter(stp => stp.isRequired && stp.productId !== selectedProduct.id)
+      .sort((a, b) => a.order - b.order)
+      .map(stp => ({
+        productId: stp.productId,
+        amount: stp.usageAmount
+      }));
+
+    console.log('Setting related products:', relatedProducts);
 
     setFormData(prev => ({
       ...prev,
       serviceTypeId,
       mainProduct: {
         ...prev.mainProduct,
-        amount: serviceType.defaultUsageAmount
+        amount: mainAmount
       },
-      relatedProducts: serviceType.serviceTypeProducts
-        .filter(stp => stp.isRequired)
-        .map(stp => ({
-          productId: stp.productId,
-          amount: stp.usageAmount
-        }))
+      relatedProducts
     }));
-  }, [serviceTypes]);
+  }, [serviceTypes, selectedProduct]);
 
   // 爪の長さによる使用量の調整
   const handleNailLengthChange = useCallback((nailLength: NailLength) => {
@@ -241,6 +215,74 @@ export default function UsageRecordModal({
       relatedProducts,
     }));
   }, [formData.serviceTypeId, formData.relatedProducts, serviceTypes]);
+
+  // モーダルが開かれたときの初期化処理
+  // useEffect前のデバッグログ追加
+console.log('Modal Props:', {
+  isOpen: open,
+  hasProduct: !!selectedProduct,
+  productType: selectedProduct?.type
+});
+
+useEffect(() => {
+  if (!open) {
+    // モーダルが閉じられた時は初期状態にリセット
+    setFormData(initialFormData);
+    return;
+  }
+
+  console.log('Effect triggered:', {
+    hasProduct: !!selectedProduct,
+    productType: selectedProduct?.type,
+    serviceTypesCount: serviceTypes?.length
+  });
+
+  if (selectedProduct) {
+    const filtered = getFilteredServiceTypes();
+    console.log('Available service types:', filtered.map(t => t.name));
+
+    if (filtered.length === 1) {
+      setFormData({
+        ...initialFormData,
+        serviceTypeId: filtered[0].id,
+        mainProduct: {
+          productId: selectedProduct.id,
+          amount: filtered[0].defaultUsageAmount
+        }
+      });
+    } else {
+      setFormData({
+        ...initialFormData,
+        mainProduct: {
+          productId: selectedProduct.id,
+          amount: 0
+        }
+      });
+    }
+  }
+}, [open, selectedProduct, serviceTypes, getFilteredServiceTypes]);
+
+  // 使用記録の登録
+  const { mutate: submitUsage, isPending } = useMutation({
+    mutationFn: (data: UsageFormData) => recordUsage(storeId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products', storeId] })
+      queryClient.invalidateQueries({ queryKey: ['usages', storeId] })
+      onOpenChange(false)
+      toast({
+        title: '使用記録を登録しました',
+        description: '使用記録の登録が完了しました。',
+      })
+    },
+    onError: (error) => {
+      console.error('Usage record error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'エラー',
+        description: '使用記録の登録に失敗しました。',
+      })
+    },
+  })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -369,6 +411,28 @@ export default function UsageRecordModal({
               />
             </div>
 
+            {/* 使用量の表示 */}
+            {formData.serviceTypeId && (
+              <div className="space-y-2 border rounded-md p-3 bg-gray-50">
+                <h4 className="font-medium text-gray-700">使用量</h4>
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-600">
+                    メイン商品: {formData.mainProduct.amount.toFixed(1)}
+                    {selectedProduct?.capacityUnit}
+                  </p>
+                  {formData.relatedProducts.map((rp, index) => {
+                    const product = products?.find(p => p.id === rp.productId);
+                    return (
+                      <p key={index} className="text-sm text-gray-600">
+                        {product?.productName}: {rp.amount.toFixed(1)}
+                        {product?.capacityUnit}
+                      </p>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="grid w-full gap-1.5">
               <Label htmlFor="note" className="text-gray-700">
                 メモ
@@ -404,5 +468,5 @@ export default function UsageRecordModal({
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

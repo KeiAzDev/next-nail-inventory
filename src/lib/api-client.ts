@@ -49,7 +49,11 @@ export async function fetchServiceTypes(storeId: string): Promise<ServiceType[]>
     throw new Error('Failed to fetch service types')
   }
   const data = await response.json()
-  return data.serviceTypes // オブジェクトから配列を取得
+  
+  if (process.env.NODE_ENV === 'development') {
+  }
+  
+  return data.serviceTypes // APIレスポンスから配列を取得
 }
 
 export async function recordUsage(
