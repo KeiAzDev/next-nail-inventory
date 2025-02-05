@@ -143,6 +143,10 @@ model ServiceType {
   usages          Usage[]
   store           Store     @relation(fields: [storeId], references: [id])
   storeId         String    @db.ObjectId
+
+  designVariant     String?   // "BASIC", "FRENCH", "ART"
+  designUsageRate   Float?    // デザインによる使用量調整率
+  monthlyStats      MonthlyServiceStat[]
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -219,4 +223,28 @@ model Invitation {
   used        Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// 新規：月間統計モデル
+model MonthlyServiceStat {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id])
+  serviceTypeId String    @db.ObjectId
+  month         Int
+  year          Int
+  totalUsage    Float
+  averageUsage  Float
+  usageCount    Int
+  temperature   Float?
+  humidity      Float?
+  seasonalRate  Float?    // 実績に基づく季節係数
+
+  // 分析データ追加
+  designUsageStats   Json?    // デザインタイプ別使用量集計 
+  predictedUsage     Float?   // 予測使用量
+  actualDeviation    Float?   // 予測との差分
+  averageTimePerUse  Float?   // 平均使用時間
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
