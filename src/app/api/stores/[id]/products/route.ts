@@ -1,5 +1,4 @@
-//src/api/stores/[id]/products/route.ts
-
+//src/app/api/stores/[id]/products/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
@@ -25,14 +24,29 @@ export async function GET(
     const products = await prisma.product.findMany({
       where: { storeId },
       include: {
-        currentProductLots: true  // ロット情報も取得
+        currentProductLots: true
       },
       orderBy: {
         updatedAt: 'desc'
       }
     })
 
-    return NextResponse.json(products)
+    // レスポンスデータの整形
+    const formattedProducts = products.map(product => ({
+      ...product,
+      lots: product.currentProductLots.map(lot => ({
+        ...lot,
+        startedAt: lot.startedAt?.toISOString() || null,
+        createdAt: lot.createdAt.toISOString(),
+        updatedAt: lot.updatedAt.toISOString()
+      })),
+      createdAt: product.createdAt.toISOString(),
+      updatedAt: product.updatedAt.toISOString(),
+      lastUsed: product.lastUsed?.toISOString() || null,
+      currentProductLots: undefined  // この属性は削除
+    }))
+
+    return NextResponse.json(formattedProducts)
   } catch (error) {
     console.error('Products fetch error:', error)
     return NextResponse.json(
@@ -115,10 +129,22 @@ export async function POST(
         })
       }
 
-      return {
+      // 作成した商品データを整形して返却
+      const formattedProduct = {
         ...product,
-        lots: [inUseLot]
+        lots: [{
+          ...inUseLot,
+          startedAt: inUseLot.startedAt?.toISOString() || null,
+          createdAt: inUseLot.createdAt.toISOString(),
+          updatedAt: inUseLot.updatedAt.toISOString()
+        }],
+        createdAt: product.createdAt.toISOString(),
+        updatedAt: product.updatedAt.toISOString(),
+        lastUsed: product.lastUsed?.toISOString() || null,
+        currentProductLots: undefined
       }
+
+      return formattedProduct
     })
 
     return NextResponse.json(result)

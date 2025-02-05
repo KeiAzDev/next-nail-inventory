@@ -57,10 +57,10 @@ export interface ProductLot {
   id: string
   productId: string
   isInUse: boolean
-  currentAmount?: number
-  startedAt?: Date
-  createdAt: Date
-  updatedAt: Date
+  currentAmount?: number | null
+  startedAt?: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export type StaffMember = {

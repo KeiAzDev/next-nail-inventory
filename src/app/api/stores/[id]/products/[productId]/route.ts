@@ -35,7 +35,22 @@ export async function GET(
       return new NextResponse('Product not found', { status: 404 })
     }
 
-    return NextResponse.json(product)
+    // データを整形して返却
+    const formattedProduct = {
+      ...product,
+      lots: product.currentProductLots.map(lot => ({
+        ...lot,
+        startedAt: lot.startedAt?.toISOString() || null,
+        createdAt: lot.createdAt.toISOString(),
+        updatedAt: lot.updatedAt.toISOString()
+      })),
+      createdAt: product.createdAt.toISOString(),
+      updatedAt: product.updatedAt.toISOString(),
+      lastUsed: product.lastUsed?.toISOString() || null,
+      currentProductLots: undefined
+    }
+
+    return NextResponse.json(formattedProduct)
   } catch (error) {
     console.error('Product fetch error:', error)
     return NextResponse.json(
@@ -65,6 +80,18 @@ export async function DELETE(
       (session.user.role !== 'ADMIN' && session.user.role !== 'MANAGER')
     ) {
       return new NextResponse('Forbidden', { status: 403 })
+    }
+
+    // 商品の存在確認
+    const existingProduct = await prisma.product.findUnique({
+      where: {
+        id: productId,
+        storeId
+      }
+    })
+
+    if (!existingProduct) {
+      return new NextResponse('Product not found', { status: 404 })
     }
 
     // トランザクションで商品と関連データを削除
