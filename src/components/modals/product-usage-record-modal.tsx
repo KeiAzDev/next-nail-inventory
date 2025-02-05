@@ -22,8 +22,8 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { NailLength, ServiceType, Product } from '@/types/api'
-import { fetchServiceTypes, recordUsage } from '@/lib/api-client'
+import type { NailLength, ServiceType, Product, CreateUsageRequest } from '@/types/api'
+import { fetchServiceTypes, recordUsage, fetchClimateData } from '@/lib/api-client'
 
 interface ProductUsageRecordModalProps {
   storeId: string
@@ -37,14 +37,19 @@ interface UsageFormData {
   mainProduct: {
     productId: string
     amount: number
+    isCustom: boolean
+    defaultAmount?: number
   }
   relatedProducts: {
     productId: string
     amount: number
+    isCustom: boolean
+    defaultAmount?: number
   }[]
   nailLength: NailLength
   date: string
   note?: string
+  adjustmentReason?: string
 }
 
 const initialFormData = (productId: string): UsageFormData => ({
@@ -52,12 +57,69 @@ const initialFormData = (productId: string): UsageFormData => ({
   mainProduct: {
     productId,
     amount: 0,
+    isCustom: false
   },
   relatedProducts: [],
   nailLength: 'MEDIUM',
   date: new Date().toISOString().split('T')[0],
   note: '',
 })
+
+interface UsageAmountInputProps {
+  amount: number
+  defaultAmount: number
+  isCustom: boolean
+  maxAmount?: number
+  unit?: string
+  onAmountChange: (amount: number, isCustom: boolean) => void
+}
+
+function UsageAmountInput({
+  amount,
+  defaultAmount,
+  isCustom,
+  maxAmount,
+  unit,
+  onAmountChange
+}: UsageAmountInputProps) {
+  const handleAmountChange = (value: string) => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue) || numValue < 0 || (maxAmount && numValue > maxAmount)) {
+      return;
+    }
+    onAmountChange(numValue, true);
+  };
+
+  const resetToDefault = () => {
+    onAmountChange(defaultAmount, false);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        type="number"
+        value={amount}
+        onChange={(e) => handleAmountChange(e.target.value)}
+        step={0.1}
+        min={0}
+        max={maxAmount}
+        className={`bg-white ${isCustom ? "border-blue-500" : ""}`}
+      />
+      <span className="text-sm text-gray-500">{unit}</span>
+      {isCustom && (
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          onClick={resetToDefault}
+          className="text-xs"
+        >
+          デフォルトに戻す
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export default function ProductUsageRecordModal({
   storeId,
@@ -76,6 +138,12 @@ export default function ProductUsageRecordModal({
   } = useQuery<ServiceType[]>({
     queryKey: ['serviceTypes', storeId],
     queryFn: () => fetchServiceTypes(storeId),
+    enabled: open,
+  })
+
+  const { data: climateData } = useQuery({
+    queryKey: ['climate'],
+    queryFn: fetchClimateData,
     enabled: open,
   })
 
@@ -113,9 +181,15 @@ export default function ProductUsageRecordModal({
       nailLength,
       mainProduct: {
         ...prev.mainProduct,
-        amount: calculations.mainAmount
+        amount: prev.mainProduct.isCustom ? prev.mainProduct.amount : calculations.mainAmount,
+        defaultAmount: calculations.defaultAmount
       },
-      relatedProducts: calculations.relatedAmounts.filter(ra => ra.productId !== product.id)
+      relatedProducts: calculations.relatedAmounts.filter(ra => ra.productId !== product.id).map(ra => ({
+        productId: ra.productId,
+        amount: ra.amount,
+        defaultAmount: ra.defaultAmount,
+        isCustom: false
+      }))
     }));
   };
 
@@ -130,14 +204,21 @@ export default function ProductUsageRecordModal({
       serviceTypeId,
       mainProduct: {
         productId: prev.mainProduct.productId,
-        amount: calculations.mainAmount
+        amount: calculations.mainAmount,
+        defaultAmount: calculations.defaultAmount,
+        isCustom: false
       },
-      relatedProducts: calculations.relatedAmounts.filter(ra => ra.productId !== product.id)
+      relatedProducts: calculations.relatedAmounts.filter(ra => ra.productId !== product.id).map(ra => ({
+        productId: ra.productId,
+        amount: ra.amount,
+        defaultAmount: ra.defaultAmount,
+        isCustom: false
+      }))
     }));
   };
 
   const { mutate: submitUsage, isPending } = useMutation({
-    mutationFn: (data: UsageFormData) => recordUsage(storeId, data),
+    mutationFn: (data: CreateUsageRequest) => recordUsage(storeId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products', storeId] })
       queryClient.invalidateQueries({ queryKey: ['usages', storeId] })
@@ -159,7 +240,12 @@ export default function ProductUsageRecordModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    submitUsage(formData)
+    submitUsage({
+      ...formData,
+      temperature: climateData?.temperature,
+      humidity: climateData?.humidity,
+      designVariant: serviceTypes?.find(st => st.id === formData.serviceTypeId)?.designVariant
+    })
   }
 
   const filteredServiceTypes = serviceTypes ? getFilteredServiceTypes(serviceTypes) : [];
@@ -210,27 +296,106 @@ export default function ProductUsageRecordModal({
               </Select>
             </div>
 
-            {/* 使用量の表示 */}
+            {/* 使用量入力セクション */}
             {formData.serviceTypeId && (
-              <div className="space-y-2 border rounded-md p-3 bg-gray-50">
+              <div className="space-y-4 border rounded-md p-4 bg-gray-50">
                 <h4 className="font-medium">使用量</h4>
-                <div className="space-y-1">
-                  <p className="text-sm text-gray-600">
-                    {product.productName}: {formData.mainProduct.amount.toFixed(1)}
-                    {product.capacityUnit}
-                  </p>
-                  {formData.relatedProducts.map((rp, index) => {
-                    const relatedProduct = serviceTypes
-                      ?.find(st => st.id === formData.serviceTypeId)
-                      ?.serviceTypeProducts
-                      .find(stp => stp.productId === rp.productId)
-                    return (
-                      <p key={index} className="text-sm text-gray-600">
-                        関連商品: {rp.amount.toFixed(1)}
-                        {relatedProduct?.product?.capacityUnit}
-                      </p>
-                    );
-                  })}
+                
+                {/* メイン商品の使用量 */}
+                <div className="space-y-2">
+                  <Label>
+                    {product.productName}
+                    {formData.mainProduct.isCustom && (
+                      <span className="ml-2 text-sm text-blue-600">カスタム</span>
+                    )}
+                  </Label>
+                  <UsageAmountInput
+                    amount={formData.mainProduct.amount}
+                    defaultAmount={formData.mainProduct.defaultAmount ?? 0}
+                    isCustom={formData.mainProduct.isCustom}
+                    maxAmount={product.capacity ?? undefined}
+                    unit={product.capacityUnit ?? undefined}
+                    onAmountChange={(amount, isCustom) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        mainProduct: {
+                          ...prev.mainProduct,
+                          amount,
+                          isCustom
+                        }
+                      }));
+                    }}
+                  />
+                </div>
+
+                {/* 関連商品の使用量 */}
+                {formData.relatedProducts.map((rp, index) => {
+                  const relatedProduct = serviceTypes
+                    ?.find(st => st.id === formData.serviceTypeId)
+                    ?.serviceTypeProducts
+                    .find(stp => stp.productId === rp.productId)
+                    ?.product;
+
+                  if (!relatedProduct) return null;
+
+                  return (
+                    <div key={rp.productId} className="space-y-2">
+                      <Label>
+                        {relatedProduct.productName}
+                        {rp.isCustom && (
+                          <span className="ml-2 text-sm text-blue-600">カスタム</span>
+                        )}
+                      </Label>
+                      <UsageAmountInput
+                        amount={rp.amount}
+                        defaultAmount={rp.defaultAmount ?? 0}
+                        isCustom={rp.isCustom}
+                        maxAmount={relatedProduct.capacity ?? undefined}
+                        unit={relatedProduct.capacityUnit ?? undefined}
+                        onAmountChange={(amount, isCustom) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            relatedProducts: prev.relatedProducts.map((item, i) =>
+                              i === index ? { ...item, amount, isCustom } : item
+                            )
+                          }));
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+
+                {/* カスタム値の場合の調整理由入力 */}
+                {(formData.mainProduct.isCustom || formData.relatedProducts.some(rp => rp.isCustom)) && (
+                  <div className="space-y-2">
+                    <Label>調整理由</Label>
+                    <Input
+                      value={formData.adjustmentReason ?? ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        adjustmentReason: e.target.value
+                      }))}
+                      placeholder="使用量を調整した理由を入力してください"
+                      className="bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 気象データの表示 */}
+            {climateData && (
+              <div className="space-y-2 border rounded-md p-3 bg-blue-50">
+                <h4 className="font-medium">環境データ</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">気温</p>
+                    <p className="font-medium">{climateData.temperature}℃</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">湿度</p>
+                    <p className="font-medium">{climateData.humidity}%</p>
+                  </div>
                 </div>
               </div>
             )}
@@ -245,6 +410,7 @@ export default function ProductUsageRecordModal({
                   setFormData((prev) => ({ ...prev, date: e.target.value }))
                 }
                 required
+                className="bg-white"
               />
             </div>
 
@@ -256,6 +422,7 @@ export default function ProductUsageRecordModal({
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, note: e.target.value }))
                 }
+                className="bg-white"
               />
             </div>
 
@@ -269,6 +436,7 @@ export default function ProductUsageRecordModal({
               </Button>
               <Button
                 type="submit"
+                variant="default"
                 disabled={isPending || !formData.serviceTypeId}
               >
                 {isPending ? '登録中...' : '登録'}

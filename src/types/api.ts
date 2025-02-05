@@ -89,6 +89,28 @@ export type ServiceType = {
   allowCustomAmount: boolean
   serviceTypeProducts: ServiceTypeProduct[]
   storeId: string
+  designVariant?: string
+  designUsageRate?: number
+  monthlyStats?: MonthlyServiceStat[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type MonthlyServiceStat = {
+  id: string
+  serviceTypeId: string
+  month: number
+  year: number
+  totalUsage: number
+  averageUsage: number
+  usageCount: number
+  temperature?: number
+  humidity?: number
+  seasonalRate?: number
+  designUsageStats?: Record<string, number>
+  predictedUsage?: number
+  actualDeviation?: number
+  averageTimePerUse?: number
   createdAt: string
   updatedAt: string
 }
@@ -141,6 +163,9 @@ export type CreateUsageRequest = {
   serviceTypeId: string
   nailLength: NailLength
   note?: string
+  designVariant?: string
+  temperature?: number
+  humidity?: number
 }
 
 // 既存の型定義に追加

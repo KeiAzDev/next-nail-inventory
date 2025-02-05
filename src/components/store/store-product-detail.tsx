@@ -93,10 +93,10 @@ export default function StoreProductDetail({
               <CardTitle>基本情報</CardTitle>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowUsageModal(true)}>
+              <Button variant="default" onClick={() => setShowUsageModal(true)}>
                 使用記録
               </Button>
-              <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
+              <Button variant="default" onClick={() => setShowDeleteDialog(true)}>
                 削除
               </Button>
             </div>

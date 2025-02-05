@@ -1,4 +1,4 @@
-import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse } from '@/types/api'
+import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse, CreateUsageRequest } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
   const response = await fetch(`/api/stores/${storeId}`)
@@ -58,20 +58,7 @@ export async function fetchServiceTypes(storeId: string): Promise<ServiceType[]>
 
 export async function recordUsage(
   storeId: string,
-  data: {
-    serviceTypeId: string
-    mainProduct: {
-      productId: string
-      amount: number
-    }
-    relatedProducts: {
-      productId: string
-      amount: number
-    }[]
-    nailLength: NailLength
-    date: string
-    note?: string
-  }
+  data: CreateUsageRequest,
 ): Promise<Usage> {
   const response = await fetch(`/api/stores/${storeId}/usages`, {
     method: 'POST',
@@ -172,4 +159,22 @@ export async function deleteInvitation(storeId: string, token: string): Promise<
   if (!response.ok) {
     throw new Error('Failed to delete invitation')
   }
+}
+
+export type DeleteInvitationRequest = {
+  token: string
+}
+
+export type ClimateData = {
+  temperature: number
+  humidity: number
+  timestamp: string
+}
+
+export async function fetchClimateData(): Promise<ClimateData> {
+  const response = await fetch('/api/climate-data')
+  if (!response.ok) {
+    throw new Error('Failed to fetch climate data')
+  }
+  return response.json()
 }

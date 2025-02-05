@@ -1,16 +1,23 @@
-//src/app/api/stores/[id]/usages/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { CreateUsageRequest } from '@/types/api'
-import type { PrismaClient, Prisma, PrismaPromise } from '@prisma/client'
+import type { PrismaClient, Prisma } from '@prisma/client'
 
-// トランザクション用の型定義
 type TransactionClient = Omit<
   PrismaClient,
   '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
 >
+
+interface UpdateMonthlyStatsParams {
+  serviceTypeId: string;
+  date: Date;
+  amount: number;
+  designVariant?: string;
+  temperature?: number;
+  humidity?: number;
+}
 
 export async function GET(
   request: NextRequest,
@@ -160,57 +167,8 @@ export async function POST(
       })
 
       // メイン商品のロット・在庫更新
-      const inUseLot = mainProduct.currentProductLots.find(lot => lot.isInUse)
-      if (inUseLot) {
-        const newAmount = (inUseLot.currentAmount ?? 0) - body.mainProduct.amount
-        if (newAmount <= 0 && mainProduct.lotQuantity > 0) {
-          // 現在のロットを使い切り状態に更新
-          await tx.productLot.update({
-            where: { id: inUseLot.id },
-            data: {
-              currentAmount: 0,
-              isInUse: false
-            }
-          })
-    
-          // 新しいロットを使用開始
-          const newLot = await tx.productLot.findFirst({
-            where: {
-              productId: mainProduct.id,
-              isInUse: false
-            }
-          })
-    
-          if (newLot) {
-            await tx.productLot.update({
-              where: { id: newLot.id },
-              data: {
-                isInUse: true,
-                currentAmount: mainProduct.capacity,
-                startedAt: new Date()
-              }
-            })
-          }
-    
-          await tx.product.update({
-            where: { id: mainProduct.id },
-            data: {
-              lotQuantity: {
-                decrement: 1
-              }
-            }
-          })
-        } else {
-          // 現在のロットの残量を更新
-          await tx.productLot.update({
-            where: { id: inUseLot.id },
-            data: {
-              currentAmount: newAmount
-            }
-          })
-        }
-      }
-    
+      await updateProductStock(tx, mainProduct, body.mainProduct.amount)
+      
       // 関連商品の在庫更新
       for (const relatedUsage of body.relatedProducts) {
         const relatedProduct = await tx.product.findUnique({
@@ -221,58 +179,19 @@ export async function POST(
         })
 
         if (relatedProduct) {
-          const inUseLot = relatedProduct.currentProductLots.find(lot => lot.isInUse)
-          if (inUseLot) {
-            const newAmount = (inUseLot.currentAmount ?? 0) - relatedUsage.amount
-            if (newAmount <= 0 && relatedProduct.lotQuantity > 0) {
-              // 現在のロットを使い切り状態に更新
-              await tx.productLot.update({
-                where: { id: inUseLot.id },
-                data: {
-                  currentAmount: 0,
-                  isInUse: false
-                }
-              })
-
-              // 新しいロットを使用開始
-              const newLot = await tx.productLot.findFirst({
-                where: {
-                  productId: relatedProduct.id,
-                  isInUse: false
-                }
-              })
-
-              if (newLot) {
-                await tx.productLot.update({
-                  where: { id: newLot.id },
-                  data: {
-                    isInUse: true,
-                    currentAmount: relatedProduct.capacity,
-                    startedAt: new Date()
-                  }
-                })
-              }
-
-              await tx.product.update({
-                where: { id: relatedProduct.id },
-                data: {
-                  lotQuantity: {
-                    decrement: 1
-                  }
-                }
-              })
-            } else {
-              // 現在のロットの残量を更新
-              await tx.productLot.update({
-                where: { id: inUseLot.id },
-                data: {
-                  currentAmount: newAmount
-                }
-              })
-            }
-          }
+          await updateProductStock(tx, relatedProduct, relatedUsage.amount)
         }
       }
+
+      // 月間統計の更新
+      await updateMonthlyStats(tx, {
+        serviceTypeId: body.serviceTypeId,
+        date: new Date(body.date),
+        amount: body.mainProduct.amount,
+        designVariant: body.designVariant,
+        temperature: body.temperature,
+        humidity: body.humidity
+      })
 
       // 統計情報の更新
       const averageUses = await calculateAverageUses(tx, mainProduct.id)
@@ -296,6 +215,115 @@ export async function POST(
       { status: 500 }
     )
   }
+}
+
+async function updateProductStock(
+  tx: TransactionClient,
+  product: any,
+  usageAmount: number
+) {
+  const inUseLot = product.currentProductLots.find((lot: any) => lot.isInUse)
+  if (inUseLot) {
+    const newAmount = (inUseLot.currentAmount ?? 0) - usageAmount
+    if (newAmount <= 0 && product.lotQuantity > 0) {
+      // 現在のロットを使い切り状態に更新
+      await tx.productLot.update({
+        where: { id: inUseLot.id },
+        data: {
+          currentAmount: 0,
+          isInUse: false
+        }
+      })
+
+      // 新しいロットを使用開始
+      const newLot = await tx.productLot.findFirst({
+        where: {
+          productId: product.id,
+          isInUse: false
+        }
+      })
+
+      if (newLot) {
+        await tx.productLot.update({
+          where: { id: newLot.id },
+          data: {
+            isInUse: true,
+            currentAmount: product.capacity,
+            startedAt: new Date()
+          }
+        })
+      }
+
+      await tx.product.update({
+        where: { id: product.id },
+        data: {
+          lotQuantity: {
+            decrement: 1
+          }
+        }
+      })
+    } else {
+      // 現在のロットの残量を更新
+      await tx.productLot.update({
+        where: { id: inUseLot.id },
+        data: {
+          currentAmount: newAmount
+        }
+      })
+    }
+  }
+}
+
+async function updateMonthlyStats(
+  tx: TransactionClient,
+  data: UpdateMonthlyStatsParams
+) {
+  const month = data.date.getMonth() + 1;
+  const year = data.date.getFullYear();
+
+  const stat = await tx.monthlyServiceStat.findFirst({
+    where: {
+      serviceTypeId: data.serviceTypeId,
+      month,
+      year
+    }
+  });
+
+  const designUsageStats = stat?.designUsageStats as Record<string, number> ?? {};
+  if (data.designVariant) {
+    designUsageStats[data.designVariant] = (designUsageStats[data.designVariant] ?? 0) + data.amount;
+  }
+
+  return await tx.monthlyServiceStat.upsert({
+    where:  {
+      id: stat?.id ?? '',  // 既存のstatがあればそのID、なければ空文字
+    },
+    create: {
+      serviceTypeId: data.serviceTypeId,
+      month,
+      year,
+      totalUsage: data.amount,
+      usageCount: 1,
+      averageUsage: data.amount,
+      temperature: data.temperature,
+      humidity: data.humidity,
+      seasonalRate: calculateSeasonalRate({ temperature: data.temperature, humidity: data.humidity }),
+      designUsageStats,
+      predictedUsage: 0,
+      actualDeviation: 0,
+      averageTimePerUse: 0
+    },
+    update: {
+      totalUsage: { increment: data.amount },
+      usageCount: { increment: 1 },
+      averageUsage: {
+        set: stat ? ((stat.totalUsage + data.amount) / (stat.usageCount + 1)) : data.amount
+      },
+      temperature: data.temperature,
+      humidity: data.humidity,
+      designUsageStats: { set: designUsageStats }
+    }
+  });
 }
 
 async function calculateAverageUses(
@@ -327,4 +355,16 @@ async function calculateAverageUses(
 
   const totalUsages = usages.length + relatedUsages.length
   return Number((totalUsages / 30).toFixed(2))
+}
+
+function calculateSeasonalRate(data: { 
+  temperature?: number; 
+  humidity?: number;
+}): number {
+  if (!data.temperature || !data.humidity) return 1.0
+  
+  const tempFactor = 1 + (data.temperature - 22) * 0.01  // 22度を基準
+  const humidFactor = 1 + (data.humidity - 50) * 0.005   // 50%を基準
+  
+  return Number((tempFactor * humidFactor).toFixed(3))
 }

@@ -16,8 +16,8 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useToast } from '@/components/ui/use-toast'
 import { calculateUsageAmounts } from '@/lib/usage-calculations'
-import { fetchServiceTypes, fetchStoreProducts, recordUsage } from '@/lib/api-client'
-import type { Product, ServiceType, NailLength, ProductType } from '@/types/api'
+import { fetchServiceTypes, fetchStoreProducts, recordUsage, fetchClimateData } from '@/lib/api-client'
+import type { Product, ServiceType, NailLength, ProductType, CreateUsageRequest } from '@/types/api'
 import { DialogDescription } from '@/components/ui/dialog'
 
 interface InventoryUsageRecordModalProps {
@@ -64,7 +64,7 @@ export default function InventoryUsageRecordModal({
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedType, setSelectedType] = useState<ProductType | 'ALL'>('ALL')
 
-  // 商品とサービスタイプの取得
+  // データ取得
   const { data: products = [] } = useQuery({
     queryKey: ['products', storeId],
     queryFn: () => fetchStoreProducts(storeId),
@@ -74,6 +74,12 @@ export default function InventoryUsageRecordModal({
   const { data: serviceTypes = [] } = useQuery({
     queryKey: ['serviceTypes', storeId],
     queryFn: () => fetchServiceTypes(storeId),
+    enabled: open,
+  })
+
+  const { data: climateData } = useQuery({
+    queryKey: ['climate'],
+    queryFn: fetchClimateData,
     enabled: open,
   })
 
@@ -155,7 +161,7 @@ export default function InventoryUsageRecordModal({
 
   // 使用記録の登録
   const { mutate: submitUsage, isPending } = useMutation({
-    mutationFn: (data: UsageFormData) => recordUsage(storeId, data),
+    mutationFn: (data: CreateUsageRequest) => recordUsage(storeId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products', storeId] })
       queryClient.invalidateQueries({ queryKey: ['usages', storeId] })
@@ -177,7 +183,12 @@ export default function InventoryUsageRecordModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    submitUsage(formData)
+    submitUsage({
+      ...formData,
+      temperature: climateData?.temperature,
+      humidity: climateData?.humidity,
+      designVariant: serviceTypes?.find(st => st.id === formData.serviceTypeId)?.designVariant
+    })
   }
 
   return (
@@ -282,6 +293,23 @@ export default function InventoryUsageRecordModal({
                         </p>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* 気象データの表示 */}
+              {climateData && (
+                <div className="space-y-2 border rounded-md p-3 bg-blue-50">
+                  <h4 className="font-medium">環境データ</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">気温</p>
+                      <p className="font-medium">{climateData.temperature}℃</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">湿度</p>
+                      <p className="font-medium">{climateData.humidity}%</p>
+                    </div>
                   </div>
                 </div>
               )}
