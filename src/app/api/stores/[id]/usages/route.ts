@@ -137,8 +137,10 @@ export async function POST(
         data: {
           date: new Date(body.date),
           usageAmount: body.mainProduct.amount,
+          defaultAmount: body.mainProduct.defaultAmount,
+          isCustomAmount: body.mainProduct.isCustom,
           nailLength: body.nailLength,
-          isCustomAmount: false,
+          adjustmentReason: body.adjustmentReason,
           note: body.note,
           serviceType: {
             connect: { id: body.serviceTypeId }
@@ -149,6 +151,8 @@ export async function POST(
           relatedUsages: {
             create: body.relatedProducts.map((rp) => ({
               amount: rp.amount,
+              defaultAmount: rp.defaultAmount,
+              isCustomAmount: rp.isCustom,
               product: {
                 connect: { id: rp.productId }
               }
@@ -239,7 +243,8 @@ async function updateProductStock(
       const newLot = await tx.productLot.findFirst({
         where: {
           productId: product.id,
-          isInUse: false
+          isInUse: false,
+          currentAmount: null
         }
       })
 
@@ -296,7 +301,7 @@ async function updateMonthlyStats(
 
   return await tx.monthlyServiceStat.upsert({
     where:  {
-      id: stat?.id ?? '',  // 既存のstatがあればそのID、なければ空文字
+      id: stat?.id ?? '',
     },
     create: {
       serviceTypeId: data.serviceTypeId,

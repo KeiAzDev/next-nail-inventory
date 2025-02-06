@@ -155,14 +155,19 @@ export type CreateUsageRequest = {
   mainProduct: {
     productId: string
     amount: number
+    isCustom: boolean     // 追加: カスタム値かどうか
+    defaultAmount?: number // 追加: デフォルト値
   }
   relatedProducts: {
     productId: string
     amount: number
+    isCustom: boolean     // 追加: カスタム値かどうか
+    defaultAmount?: number // 追加: デフォルト値
   }[]
   serviceTypeId: string
   nailLength: NailLength
   note?: string
+  adjustmentReason?: string  // 追加: 調整理由
   designVariant?: string
   temperature?: number
   humidity?: number

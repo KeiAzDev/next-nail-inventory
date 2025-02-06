@@ -175,6 +175,7 @@ model Usage {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   date          DateTime
   usageAmount   Float
+  defaultAmount Float?
   nailLength    NailLength
   isCustomAmount Boolean  @default(false)
   isGelService  Boolean   @default(false)  // ジェル施術かどうか
@@ -184,6 +185,7 @@ model Usage {
   serviceTypeId String     @db.ObjectId
   product       Product    @relation(fields: [productId], references: [id])
   productId     String     @db.ObjectId
+  adjustmentReason String?
 
    // 使用したロットへの参照
   usedLot      ProductLot? @relation(fields: [usedLotId], references: [id])
@@ -200,6 +202,8 @@ model RelatedProductUsage {
   product       Product   @relation(fields: [productId], references: [id])
   productId     String    @db.ObjectId
   amount        Float
+  defaultAmount Float?
+  isCustomAmount Boolean  @default(false)
 
   // 使用順序と役割の追加
   order         Int       @default(0)
