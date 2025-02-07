@@ -251,4 +251,5 @@ model MonthlyServiceStat {
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  @@unique([serviceTypeId, year, month], name: "monthlyStatIdentifier")
 }

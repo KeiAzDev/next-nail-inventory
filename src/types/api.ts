@@ -7,6 +7,8 @@ export type QueryKeys = {
   serviceTypes: ['serviceTypes', string]
   usages: ['usages', string]
   invitations: ['invitations', string]
+  predictions: ['predictions', string]
+  statistics: ['statistics', string, string] // storeId, serviceTypeId
 }
 
 export type Store = {
@@ -51,6 +53,7 @@ export type Product = {
   inUseQuantity: number
   lotQuantity: number
   lots?: ProductLot[]
+  serviceTypeProducts?: ServiceTypeProduct[]
 }
 
 export interface ProductLot {
@@ -104,13 +107,13 @@ export type MonthlyServiceStat = {
   totalUsage: number
   averageUsage: number
   usageCount: number
-  temperature?: number
-  humidity?: number
-  seasonalRate?: number
-  designUsageStats?: Record<string, number>
-  predictedUsage?: number
-  actualDeviation?: number
-  averageTimePerUse?: number
+  temperature: number | null
+  humidity: number | null
+  seasonalRate: number | null
+  designUsageStats: Record<string, number> | null
+  predictedUsage: number | null
+  actualDeviation: number | null
+  averageTimePerUse: number | null
   createdAt: string
   updatedAt: string
 }
