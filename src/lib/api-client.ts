@@ -178,3 +178,38 @@ export async function fetchClimateData(): Promise<ClimateData> {
   }
   return response.json()
 }
+
+export interface StatisticsResponse {
+  statistics: {
+    serviceTypeId: string
+    serviceName: string
+    totalUsageCount: number
+    totalUsageAmount: number
+    monthlyStats: Array<{
+      id: string
+      serviceTypeId: string
+      month: number
+      year: number
+      totalUsage: number
+      averageUsage: number
+      usageCount: number
+      temperature: number | null
+      humidity: number | null
+      seasonalRate: number | null
+      designUsageStats: Record<string, number> | null
+      predictedUsage: number | null
+      actualDeviation: number | null
+      averageTimePerUse: number | null
+      createdAt: string
+      updatedAt: string
+    }>
+  }[]
+}
+
+export async function fetchStoreStatistics(storeId: string): Promise<StatisticsResponse> {
+  const response = await fetch(`/api/stores/${storeId}/statistics`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch store statistics')
+  }
+  return response.json()
+}
