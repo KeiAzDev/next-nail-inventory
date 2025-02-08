@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { Card } from '@/components/ui/card'
+import StoreStatistics from '@/components/store/store-statistics'
 
 interface StatisticsPageProps {
   params: Promise<{ id: string }> | { id: string }
@@ -22,7 +23,7 @@ export default async function StatisticsPage({ params }: StatisticsPageProps) {
             </Card>
           }
         >
-          {/* StatisticsDashboard will be implemented here */}
+          <StoreStatistics storeId={storeId} />
         </Suspense>
       </div>
     </div>

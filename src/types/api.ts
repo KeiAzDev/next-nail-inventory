@@ -220,3 +220,19 @@ export type ValidateInvitationResponse = {
 export type DeleteInvitationRequest = {
   token: string
 }
+
+export interface StatisticsResponse {
+  statistics: {
+    serviceTypeId: string
+    serviceName: string
+    totalUsageCount: number
+    totalUsageAmount: number
+    monthlyStats: Array<MonthlyServiceStat>
+  }[]
+}
+
+export interface ClimateData {
+  temperature: number;
+  humidity: number;
+  timestamp: string;
+}

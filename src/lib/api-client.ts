@@ -1,4 +1,6 @@
-import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse, CreateUsageRequest } from '@/types/api'
+import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse, CreateUsageRequest, ClimateData,
+  StatisticsResponse
+} from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
   const response = await fetch(`/api/stores/${storeId}`)
@@ -165,45 +167,21 @@ export type DeleteInvitationRequest = {
   token: string
 }
 
-export type ClimateData = {
-  temperature: number
-  humidity: number
-  timestamp: string
-}
-
-export async function fetchClimateData(): Promise<ClimateData> {
-  const response = await fetch('/api/climate-data')
+export async function fetchClimateData(lat: number, lon: number): Promise<ClimateData> {
+  const params = new URLSearchParams({
+    lat: lat.toString(),
+    lon: lon.toString()
+  });
+  
+  const url = `/api/climate-data?${params.toString()}`;  
+  const response = await fetch(url);
   if (!response.ok) {
-    throw new Error('Failed to fetch climate data')
+    const errorData = await response.json().catch(() => ({ error: '不明なエラー' }));
+    throw new Error(errorData.error || '気象データの取得に失敗しました');
   }
-  return response.json()
-}
-
-export interface StatisticsResponse {
-  statistics: {
-    serviceTypeId: string
-    serviceName: string
-    totalUsageCount: number
-    totalUsageAmount: number
-    monthlyStats: Array<{
-      id: string
-      serviceTypeId: string
-      month: number
-      year: number
-      totalUsage: number
-      averageUsage: number
-      usageCount: number
-      temperature: number | null
-      humidity: number | null
-      seasonalRate: number | null
-      designUsageStats: Record<string, number> | null
-      predictedUsage: number | null
-      actualDeviation: number | null
-      averageTimePerUse: number | null
-      createdAt: string
-      updatedAt: string
-    }>
-  }[]
+  
+  const data = await response.json();
+  return data;
 }
 
 export async function fetchStoreStatistics(storeId: string): Promise<StatisticsResponse> {

@@ -7,12 +7,13 @@ import { generatePrediction } from '@/lib/prediction/prediction-engine';
 import type { MonthlyServiceStat } from '@/types/api';
 
 export async function GET(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // パラメータの検証
-    if (!params?.id) {
+    // パラメータをURLから直接取得
+    const storeId = await params.id;
+    if (!storeId) {
       return NextResponse.json({ error: 'Store ID is required' }, { status: 400 });
     }
 
@@ -22,150 +23,158 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 店舗の存在確認
-    const store = await prisma.store.findUnique({
-      where: { id: params.id }
-    });
-
-    if (!store) {
-      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
-    }
-
-    // 現在の月を取得
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-
-    // 店舗のサービスタイプを取得
-    const serviceTypes = await prisma.serviceType.findMany({
-      where: {
-        storeId: params.id
-      },
-      include: {
-        monthlyStats: {
-          orderBy: [
-            { year: 'desc' },
-            { month: 'desc' }
-          ],
-          take: 12 // 過去12ヶ月分のデータを取得
-        }
-      }
-    });
-
-    if (!serviceTypes.length) {
-      return NextResponse.json({
-        predictions: [],
-        timestamp: new Date().toISOString()
+    // prisma.$transactionを使用
+    const predictionData = await prisma.$transaction(async (prisma) => {
+      // 店舗の存在確認
+      const store = await prisma.store.findUnique({
+        where: { id: storeId }
       });
-    }
 
-    // サービスタイプごとの予測を生成
-    const predictions = await Promise.all(
-      serviceTypes.map(async (serviceType) => {
-        // Prismaから返されるデータを安全に変換
-        const formattedStats: MonthlyServiceStat[] = serviceType.monthlyStats.map(stat => {
-          // designUsageStatsの安全な変換
-          let parsedDesignStats: Record<string, number> | null = null;
-          if (stat.designUsageStats) {
-            try {
-              const parsed = typeof stat.designUsageStats === 'string' 
-                ? JSON.parse(stat.designUsageStats)
-                : stat.designUsageStats;
-              
-              if (typeof parsed === 'object' && parsed !== null) {
-                parsedDesignStats = Object.entries(parsed).reduce((acc, [key, value]) => {
-                  if (typeof value === 'number') {
-                    acc[key] = value;
-                  }
-                  return acc;
-                }, {} as Record<string, number>);
-              }
-            } catch (e) {
-              console.warn('Failed to parse designUsageStats:', e);
-            }
-          }
+      if (!store) {
+        throw new Error('Store not found');
+      }
 
-          return {
-            id: stat.id,
-            serviceTypeId: stat.serviceTypeId,
-            month: stat.month,
-            year: stat.year,
-            totalUsage: stat.totalUsage,
-            averageUsage: stat.averageUsage,
-            usageCount: stat.usageCount,
-            temperature: stat.temperature,
-            humidity: stat.humidity,
-            seasonalRate: stat.seasonalRate,
-            designUsageStats: parsedDesignStats,
-            predictedUsage: stat.predictedUsage,
-            actualDeviation: stat.actualDeviation,
-            averageTimePerUse: stat.averageTimePerUse,
-            createdAt: stat.createdAt.toISOString(),
-            updatedAt: stat.updatedAt.toISOString()
-          };
-        });
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth();
+      const currentYear = currentDate.getFullYear();
 
-        const prediction = generatePrediction(
-          formattedStats,
-          currentMonth
-        );
+      // サービスタイプの取得
+      const serviceTypes = await prisma.serviceType.findMany({
+        where: { storeId }
+      });
 
-        try {
-          // 既存の統計データを検索
-          const existingStat = await prisma.monthlyServiceStat.findFirst({
+      if (!serviceTypes.length) {
+        return { predictions: [] };
+      }
+
+      // 各サービスタイプの使用履歴を取得
+      const predictions = await Promise.all(
+        serviceTypes.map(async (serviceType) => {
+          // 過去12ヶ月の使用データを取得
+          const usages = await prisma.usage.findMany({
             where: {
-              serviceTypeId: serviceType.id,
-              year: currentYear,
-              month: currentMonth + 1
+              serviceTypeId: serviceType.id
+            },
+            orderBy: {
+              date: 'desc'
+            },
+            take: 12,
+            select: {
+              id: true,
+              date: true,
+              usageAmount: true,
+              serviceTypeId: true
             }
           });
 
-          // 予測データを保存または更新
-          if (existingStat) {
-            await prisma.monthlyServiceStat.update({
-              where: { id: existingStat.id },
-              data: {
-                predictedUsage: prediction.predictedUsage,
-                actualDeviation: existingStat.totalUsage > 0 
-                  ? Math.abs(prediction.predictedUsage - existingStat.totalUsage) 
-                  : null
-              }
-            });
-          } else {
-            await prisma.monthlyServiceStat.create({
-              data: {
+          // 月次データに集計
+          const monthlyStats = usages.reduce<Record<string, MonthlyServiceStat>>((acc, usage) => {
+            const date = new Date(usage.date);
+            const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+            
+            if (!acc[key]) {
+              acc[key] = {
+                id: `${serviceType.id}-${key}`,
                 serviceTypeId: serviceType.id,
-                month: currentMonth + 1,
-                year: currentYear,
+                month: date.getMonth() + 1,
+                year: date.getFullYear(),
                 totalUsage: 0,
                 averageUsage: 0,
                 usageCount: 0,
-                predictedUsage: prediction.predictedUsage
-              }
-            });
-          }
-        } catch (error) {
-          console.error(`Failed to update stats for service type ${serviceType.id}:`, error);
-          // 統計の更新に失敗しても予測は返す
-        }
+                temperature: null,
+                humidity: null,
+                seasonalRate: null,
+                designUsageStats: null,
+                predictedUsage: null,
+                actualDeviation: null,
+                averageTimePerUse: null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+            }
 
-        return {
-          serviceTypeId: serviceType.id,
-          serviceName: serviceType.name,
-          ...prediction
-        };
-      })
-    );
+            acc[key].totalUsage += usage.usageAmount;
+            acc[key].usageCount += 1;
+            acc[key].averageUsage = acc[key].totalUsage / acc[key].usageCount;
+
+            return acc;
+          }, {});
+
+          const stats = Object.values(monthlyStats);
+          const prediction = generatePrediction(stats, currentMonth);
+
+          // 既存の月次統計を取得
+          const existingStat = await prisma.monthlyServiceStat.findUnique({
+            where: {
+              monthlyStatIdentifier: {
+                serviceTypeId: serviceType.id,
+                year: currentYear,
+                month: currentMonth + 1
+              }
+            }
+          });
+
+          // 実績値がある場合は予測との差分を計算
+          const actualDeviation = existingStat?.totalUsage 
+            ? Math.abs(prediction.predictedUsage - existingStat.totalUsage)
+            : null;
+
+          // 予測データを保存
+          await prisma.monthlyServiceStat.upsert({
+            where: {
+              monthlyStatIdentifier: {
+                serviceTypeId: serviceType.id,
+                year: currentYear,
+                month: currentMonth + 1
+              }
+            },
+            create: {
+              serviceTypeId: serviceType.id,
+              month: currentMonth + 1,
+              year: currentYear,
+              totalUsage: existingStat?.totalUsage ?? 0,
+              averageUsage: existingStat?.averageUsage ?? 0,
+              usageCount: existingStat?.usageCount ?? 0,
+              predictedUsage: prediction.predictedUsage,
+              actualDeviation,
+              temperature: existingStat?.temperature ?? null,
+              humidity: existingStat?.humidity ?? null,
+              seasonalRate: prediction.factors.seasonalFactor,
+              designUsageStats: existingStat?.designUsageStats ?? null,
+              averageTimePerUse: existingStat?.averageTimePerUse ?? null
+            },
+            update: {
+              predictedUsage: prediction.predictedUsage,
+              actualDeviation,
+              seasonalRate: prediction.factors.seasonalFactor
+            }
+          });
+
+          return {
+            serviceTypeId: serviceType.id,
+            serviceName: serviceType.name,
+            ...prediction
+          };
+        })
+      );
+
+      return { predictions };
+    });
 
     return NextResponse.json({
-      predictions,
+      predictions: predictionData.predictions,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
     console.error('Prediction API Error:', error instanceof Error ? error.message : 'Unknown error');
+    
+    if (error instanceof Error && error.message === 'Store not found') {
+      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to generate predictions' },
+      { error: '予測データの生成に失敗しました' },
       { status: 500 }
     );
   }

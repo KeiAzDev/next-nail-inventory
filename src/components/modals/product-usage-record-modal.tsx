@@ -143,9 +143,19 @@ export default function ProductUsageRecordModal({
 
   const { data: climateData } = useQuery({
     queryKey: ['climate'],
-    queryFn: fetchClimateData,
+    queryFn: async () => {
+      // 位置情報を取得
+      return new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject);
+      }).then(position => {
+        return fetchClimateData(
+          position.coords.latitude,
+          position.coords.longitude
+        );
+      });
+    },
     enabled: open,
-  })
+  });
 
   const getFilteredServiceTypes = useCallback((serviceTypes: ServiceType[]) => {
     if (["GEL_BASE", "GEL_TOP", "GEL_COLOR"].includes(product.type)) {
