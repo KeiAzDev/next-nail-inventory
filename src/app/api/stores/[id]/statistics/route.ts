@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const month = parseInt(searchParams.get("month") || (new Date().getMonth() + 1).toString());
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
+    const search = searchParams.get("search") || "";
 
     if (!storeId) {
       return NextResponse.json(
@@ -50,7 +51,19 @@ export async function GET(request: NextRequest) {
 
     // 商品と使用記録を取得
     const products = await prisma.product.findMany({
-      where: { storeId },
+      where: { 
+        storeId,
+        ...(search ? {
+          OR: [
+            { productName: { contains: search, mode: 'insensitive' } },
+            { brand: { contains: search, mode: 'insensitive' } },
+            { colorName: { contains: search, mode: 'insensitive' } }
+          ]
+        } : {})
+      },
+      orderBy: {
+        lastUsed: 'desc'
+      },
       skip,
       take: limit,
       include: {
@@ -71,7 +84,16 @@ export async function GET(request: NextRequest) {
 
     // 5. 総商品数の取得（ページネーション用）
     const totalProducts = await prisma.product.count({
-      where: { storeId }
+      where: { 
+        storeId,
+        ...(search ? {
+          OR: [
+            { productName: { contains: search, mode: 'insensitive' } },
+            { brand: { contains: search, mode: 'insensitive' } },
+            { colorName: { contains: search, mode: 'insensitive' } }
+          ]
+        } : {})
+      }
     });
 
     // 6. 統計データの集計

@@ -3,6 +3,7 @@
 
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useProductStatistics } from "@/hooks/queries/use-product-statistics";
 
 interface ProductUsageStatisticsProps {
@@ -31,12 +32,31 @@ export default function ProductUsageStatistics({
   const [currentPage, setCurrentPage] = useState(1);
   const [year] = useState(new Date().getFullYear());
   const [month] = useState(new Date().getMonth() + 1);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data, isLoading } = useProductStatistics(storeId, {
     year,
     month,
     page: currentPage,
   });
+
+  const filteredAndSortedStats = React.useMemo(() => {
+    if (!data?.statistics) return [];
+
+    return data.statistics
+      .filter(stat => 
+        searchQuery === "" ||
+        stat.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        stat.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        stat.colorName.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      .sort((a, b) => {
+        // 最新の使用日時で降順ソート
+        const dateA = a.lastUsedAt ? new Date(a.lastUsedAt) : new Date(0);
+        const dateB = b.lastUsedAt ? new Date(b.lastUsedAt) : new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+  }, [data?.statistics, searchQuery]);
 
   if (isLoading) {
     return (
@@ -55,7 +75,15 @@ export default function ProductUsageStatistics({
 
   return (
     <div className="space-y-4">
-      {data?.statistics.map((stat) => (
+      <div className="mb-6">
+        <Input
+          placeholder="商品名、ブランド、カラー名で検索..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="max-w-md"
+        />
+      </div>
+      {filteredAndSortedStats.map((stat) => (
         <Card key={stat.productId}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div>
@@ -154,7 +182,7 @@ export default function ProductUsageStatistics({
       ))}
 
       {/* ページネーション */}
-      {data?.hasNextPage && (
+      {data?.hasNextPage && !searchQuery && (
         <div className="flex justify-center mt-4">
           <button
             onClick={() => setCurrentPage((prev) => prev + 1)}
