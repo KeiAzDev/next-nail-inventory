@@ -6,7 +6,14 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
+    // 1. パラメータの取得と検証
     const storeId = request.nextUrl.pathname.split("/")[3];
+    const searchParams = request.nextUrl.searchParams;
+    
+    const year = parseInt(searchParams.get("year") || new Date().getFullYear().toString());
+    const month = parseInt(searchParams.get("month") || (new Date().getMonth() + 1).toString());
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
 
     if (!storeId) {
       return NextResponse.json(
@@ -15,6 +22,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 2. 認証チェック
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,6 +32,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // 3. 店舗の存在確認
     const store = await prisma.store.findUnique({
       where: { id: storeId },
     });
@@ -32,86 +41,111 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Store not found" }, { status: 404 });
     }
 
-    const serviceTypes = await prisma.serviceType.findMany({
+    // 4. 商品統計データの取得
+    const skip = (page - 1) * limit;
+    
+    // 月初と月末の日付を計算
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    // 商品と使用記録を取得
+    const products = await prisma.product.findMany({
       where: { storeId },
+      skip,
+      take: limit,
       include: {
         usages: {
-          orderBy: { date: "desc" },
-          take: 12,
-          select: {
-            date: true,
-            usageAmount: true,
-            serviceTypeId: true,
+          where: {
+            date: {
+              gte: startDate,
+              lte: endDate
+            }
           },
+          include: {
+            serviceType: true
+          }
         },
-      },
+        currentProductLots: true
+      }
     });
 
-    const statistics = await Promise.all(
-      serviceTypes.map(async (serviceType) => {
-        const monthlyData = serviceType.usages.reduce((acc, usage) => {
-          const date = new Date(usage.date);
-          const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+    // 5. 総商品数の取得（ページネーション用）
+    const totalProducts = await prisma.product.count({
+      where: { storeId }
+    });
 
-          if (!acc[key]) {
-            acc[key] = {
-              month: date.getMonth() + 1,
-              year: date.getFullYear(),
-              totalUsage: 0,
-              usageCount: 0,
-            };
-          }
+    // 6. 統計データの集計
+    const statistics = products.map(product => {
+      // 施術タイプごとの使用量を集計
+      const serviceTypeUsage = product.usages.reduce((acc, usage) => {
+        const existingUsage = acc.find(u => u.serviceTypeId === usage.serviceTypeId);
+        if (existingUsage) {
+          existingUsage.amount += usage.usageAmount;
+          existingUsage.count += 1;
+        } else {
+          acc.push({
+            serviceTypeId: usage.serviceTypeId,
+            // serviceTypeの名前を追加
+            serviceTypeName: usage.serviceType.name,
+            amount: usage.usageAmount,
+            count: 1
+          });
+        }
+        return acc;
+      }, [] as { 
+        serviceTypeId: string;
+        serviceTypeName: string;
+        amount: number;
+        count: number;
+      }[]);
+    
+      // 総使用量と使用回数を計算
+      const totalUsage = serviceTypeUsage.reduce((sum, usage) => sum + usage.amount, 0);
+      const usageCount = serviceTypeUsage.reduce((sum, usage) => sum + usage.count, 0);
+    
+      // 残量の計算
+      const remainingAmount = product.currentProductLots.reduce((sum, lot) => {
+        if (lot.isInUse && lot.currentAmount !== null) {
+          return sum + lot.currentAmount;
+        }
+        return sum;
+      }, 0);
+    
+      return {
+        productId: product.id,
+        // 商品情報を追加
+        brand: product.brand,
+        productName: product.productName,
+        colorName: product.colorName,
+        type: product.type,
+        capacityUnit: product.capacityUnit || 'ml',
+        // 既存の統計情報
+        year,
+        month,
+        totalUsage,
+        usageCount,
+        serviceTypeUsage,
+        remainingAmount,
+        estimatedDaysLeft: product.estimatedDaysLeft,
+        lastUsedAt: product.lastUsed?.toISOString() || null,
+        predictedUsage: null,
+        predictionConfidence: null
+      };
+    });
 
-          acc[key].totalUsage += usage.usageAmount;
-          acc[key].usageCount++;
-          return acc;
-        }, {} as Record<string, any>);
+    return NextResponse.json({
+      statistics,
+      totalProducts,
+      hasNextPage: (page * limit) < totalProducts
+    });
 
-        const monthlyStats = Object.values(monthlyData)
-          .sort((a, b) => {
-            if (a.year !== b.year) return b.year - a.year;
-            return b.month - a.month;
-          })
-          .map((stat) => ({
-            id: `${serviceType.id}-${stat.year}-${stat.month}`,
-            serviceTypeId: serviceType.id,
-            month: stat.month,
-            year: stat.year,
-            totalUsage: stat.totalUsage,
-            averageUsage: stat.totalUsage / stat.usageCount,
-            usageCount: stat.usageCount,
-            temperature: null,
-            humidity: null,
-            seasonalRate: null,
-            designUsageStats: null,
-            predictedUsage: null,
-            actualDeviation: null,
-            averageTimePerUse: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }));
-
-        return {
-          serviceTypeId: serviceType.id,
-          serviceName: serviceType.name,
-          totalUsageCount: serviceType.usages.length,
-          totalUsageAmount: serviceType.usages.reduce(
-            (sum, u) => sum + u.usageAmount,
-            0
-          ),
-          monthlyStats,
-        };
-      })
-    );
-
-    return NextResponse.json({ statistics });
   } catch (error) {
     console.error(
-      "Statistics API Error:",
+      "Product Statistics API Error:",
       error instanceof Error ? error.message : "Unknown error"
     );
     return NextResponse.json(
-      { error: "Failed to fetch statistics" },
+      { error: "Failed to fetch product statistics" },
       { status: 500 }
     );
   }

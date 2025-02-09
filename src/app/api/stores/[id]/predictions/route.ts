@@ -68,7 +68,8 @@ export async function GET(
           });
 
           // 月次データに集計
-          const monthlyStats = usages.reduce<Record<string, MonthlyServiceStat>>((acc, usage) => {
+          const monthlyStats = Object.values(
+            usages.reduce<Record<string, MonthlyServiceStat>>((acc, usage) => {
             const date = new Date(usage.date);
             const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
             
@@ -98,7 +99,8 @@ export async function GET(
             acc[key].averageUsage = acc[key].totalUsage / acc[key].usageCount;
 
             return acc;
-          }, {});
+          }, {})
+        );
 
           const stats = Object.values(monthlyStats);
           const prediction = generatePrediction(stats, currentMonth);
@@ -137,6 +139,7 @@ export async function GET(
               usageCount: existingStat?.usageCount ?? 0,
               predictedUsage: prediction.predictedUsage,
               actualDeviation,
+              // 気象データは既存のものを維持するのみ
               temperature: existingStat?.temperature ?? null,
               humidity: existingStat?.humidity ?? null,
               seasonalRate: prediction.factors.seasonalFactor,
@@ -144,6 +147,7 @@ export async function GET(
               averageTimePerUse: existingStat?.averageTimePerUse ?? null
             },
             update: {
+              // 更新時は予測関連データのみ
               predictedUsage: prediction.predictedUsage,
               actualDeviation,
               seasonalRate: prediction.factors.seasonalFactor

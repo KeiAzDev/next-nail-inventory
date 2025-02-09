@@ -57,7 +57,8 @@ export default function Sidebar() {
   ]
 
   return (
-    <aside className="hidden md:flex md:flex-shrink-0 h-screen">
+    <div className="min-h-full flex">
+    <aside className="hidden md:flex md:flex-shrink-0 h-full">
   <div className="flex flex-col w-64 bg-white border-r">
     <nav className="flex-1 space-y-1 px-2 py-4">
       {navigation.map((item) => {
@@ -86,5 +87,6 @@ export default function Sidebar() {
     </nav>
   </div>
 </aside>
+</div>
   )
 }

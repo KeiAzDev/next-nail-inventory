@@ -160,9 +160,19 @@ export default function InventoryUsageRecordModal({
 
   const { data: climateData } = useQuery({
     queryKey: ["climate"],
-    queryFn: fetchClimateData,
+    queryFn: async (context) => {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject);
+      });
+      
+      return fetchClimateData(
+        position.coords.latitude,
+        position.coords.longitude
+      );
+    },
     enabled: open,
-  });
+    retry: false
+});
 
   // 商品のフィルタリング
   const filteredProducts = products.filter((product) => {
@@ -493,16 +503,23 @@ export default function InventoryUsageRecordModal({
 
               {/* 気象データの表示 */}
               {climateData && (
-                <div className="space-y-2 border rounded-md p-3 bg-blue-50">
-                  <h4 className="font-medium">環境データ</h4>
+                <div className="mt-6 space-y-2 border rounded-md p-3 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-gray-500">
+                      参考データ
+                    </h4>
+                    <span className="text-xs text-gray-400">
+                      施術環境の記録用
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm text-gray-600">気温</p>
-                      <p className="font-medium">{climateData.temperature}℃</p>
+                      <p className="text-xs text-gray-500">気温</p>
+                      <p className="text-sm">{climateData.temperature}℃</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">湿度</p>
-                      <p className="font-medium">{climateData.humidity}%</p>
+                      <p className="text-xs text-gray-500">湿度</p>
+                      <p className="text-sm">{climateData.humidity}%</p>
                     </div>
                   </div>
                 </div>

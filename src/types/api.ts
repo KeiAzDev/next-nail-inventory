@@ -9,6 +9,7 @@ export type QueryKeys = {
   invitations: ['invitations', string]
   predictions: ['predictions', string]
   statistics: ['statistics', string, string] // storeId, serviceTypeId
+  productStatistics: ['productStatistics', string, number, number]
 }
 
 export type Store = {
@@ -107,8 +108,8 @@ export type MonthlyServiceStat = {
   totalUsage: number
   averageUsage: number
   usageCount: number
-  temperature: number | null
-  humidity: number | null
+  temperature?: number | null
+  humidity?: number | null
   seasonalRate: number | null
   designUsageStats: Record<string, number> | null
   predictedUsage: number | null
@@ -235,4 +236,38 @@ export interface ClimateData {
   temperature: number;
   humidity: number;
   timestamp: string;
+}
+
+export interface ServiceTypeUsage {
+  serviceTypeId: string;
+  serviceTypeName: string;
+  amount: number;
+  count: number;
+}
+
+export interface ProductStatistics {
+  productId: string;
+  // 商品情報を追加
+  brand: string;
+  productName: string;
+  colorName: string;
+  type: ProductType;  // 既存のProductType enumを使用
+  capacityUnit: string | null;
+  // 既存のフィールド
+  year: number;
+  month: number;
+  totalUsage: number;
+  usageCount: number;
+  serviceTypeUsage: ServiceTypeUsage[];
+  remainingAmount: number;
+  estimatedDaysLeft: number | null;
+  lastUsedAt: string | null;
+  predictedUsage: number | null;
+  predictionConfidence: number | null;
+}
+
+export interface ProductStatisticsResponse {
+  statistics: ProductStatistics[];
+  totalProducts: number;
+  hasNextPage: boolean;
 }

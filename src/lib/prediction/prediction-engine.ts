@@ -128,15 +128,9 @@ export function generatePrediction(
   // 月別トレンドを計算
   const monthTrend = calculateMonthTrend(usageData, currentMonth);
 
-  // 予測使用量を計算
-  const predictedUsage = baseMovingAverage * seasonalFactor * monthTrend;
-
-  // 予測の信頼度を計算
-  const confidence = calculateConfidence(usageData, monthTrend);
-
   return {
-    predictedUsage,
-    confidence,
+    predictedUsage: baseMovingAverage * seasonalFactor * monthTrend,
+    confidence: calculateConfidence(usageData, monthTrend),
     factors: {
       baseMovingAverage,
       seasonalFactor,

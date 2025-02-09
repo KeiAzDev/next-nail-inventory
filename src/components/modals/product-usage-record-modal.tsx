@@ -1,77 +1,86 @@
-'use client'
+"use client";
 
-import { useState, useCallback, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { calculateUsageAmounts } from '@/lib/usage-calculations'
+import { useState, useCallback, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { calculateUsageAmounts } from "@/lib/usage-calculations";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { useToast } from '@/components/ui/use-toast'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { NailLength, ServiceType, Product, CreateUsageRequest } from '@/types/api'
-import { fetchServiceTypes, recordUsage, fetchClimateData } from '@/lib/api-client'
+} from "@/components/ui/select";
+import { useToast } from "@/components/ui/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import type {
+  NailLength,
+  ServiceType,
+  Product,
+  CreateUsageRequest,
+} from "@/types/api";
+import {
+  fetchServiceTypes,
+  recordUsage,
+  fetchClimateData,
+} from "@/lib/api-client";
 
 interface ProductUsageRecordModalProps {
-  storeId: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  product: Product
+  storeId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  product: Product;
 }
 
 interface UsageFormData {
-  serviceTypeId: string
+  serviceTypeId: string;
   mainProduct: {
-    productId: string
-    amount: number
-    isCustom: boolean
-    defaultAmount?: number
-  }
+    productId: string;
+    amount: number;
+    isCustom: boolean;
+    defaultAmount?: number;
+  };
   relatedProducts: {
-    productId: string
-    amount: number
-    isCustom: boolean
-    defaultAmount?: number
-  }[]
-  nailLength: NailLength
-  date: string
-  note?: string
-  adjustmentReason?: string
+    productId: string;
+    amount: number;
+    isCustom: boolean;
+    defaultAmount?: number;
+  }[];
+  nailLength: NailLength;
+  date: string;
+  note?: string;
+  adjustmentReason?: string;
 }
 
 const initialFormData = (productId: string): UsageFormData => ({
-  serviceTypeId: '',
+  serviceTypeId: "",
   mainProduct: {
     productId,
     amount: 0,
-    isCustom: false
+    isCustom: false,
   },
   relatedProducts: [],
-  nailLength: 'MEDIUM',
-  date: new Date().toISOString().split('T')[0],
-  note: '',
-})
+  nailLength: "MEDIUM",
+  date: new Date().toISOString().split("T")[0],
+  note: "",
+});
 
 interface UsageAmountInputProps {
-  amount: number
-  defaultAmount: number
-  isCustom: boolean
-  maxAmount?: number
-  unit?: string
-  onAmountChange: (amount: number, isCustom: boolean) => void
+  amount: number;
+  defaultAmount: number;
+  isCustom: boolean;
+  maxAmount?: number;
+  unit?: string;
+  onAmountChange: (amount: number, isCustom: boolean) => void;
 }
 
 function UsageAmountInput({
@@ -80,11 +89,15 @@ function UsageAmountInput({
   isCustom,
   maxAmount,
   unit,
-  onAmountChange
+  onAmountChange,
 }: UsageAmountInputProps) {
   const handleAmountChange = (value: string) => {
     const numValue = parseFloat(value);
-    if (isNaN(numValue) || numValue < 0 || (maxAmount && numValue > maxAmount)) {
+    if (
+      isNaN(numValue) ||
+      numValue < 0 ||
+      (maxAmount && numValue > maxAmount)
+    ) {
       return;
     }
     onAmountChange(numValue, true);
@@ -127,47 +140,54 @@ export default function ProductUsageRecordModal({
   onOpenChange,
   product,
 }: ProductUsageRecordModalProps) {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-  const [formData, setFormData] = useState<UsageFormData>(initialFormData(product.id))
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState<UsageFormData>(
+    initialFormData(product.id)
+  );
 
-  const { 
+  const {
     data: serviceTypes,
     error: serviceTypesError,
-    isLoading: isLoadingServiceTypes 
+    isLoading: isLoadingServiceTypes,
   } = useQuery<ServiceType[]>({
-    queryKey: ['serviceTypes', storeId],
+    queryKey: ["serviceTypes", storeId],
     queryFn: () => fetchServiceTypes(storeId),
-    enabled: open,
-  })
-
-  const { data: climateData } = useQuery({
-    queryKey: ['climate'],
-    queryFn: async () => {
-      // 位置情報を取得
-      return new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject);
-      }).then(position => {
-        return fetchClimateData(
-          position.coords.latitude,
-          position.coords.longitude
-        );
-      });
-    },
     enabled: open,
   });
 
-  const getFilteredServiceTypes = useCallback((serviceTypes: ServiceType[]) => {
-    if (["GEL_BASE", "GEL_TOP", "GEL_COLOR"].includes(product.type)) {
-      return serviceTypes.filter(st => st.name === "ワンカラー（ジェル）");
-    }
-    
-    if (product.type === "POLISH") {
-      return serviceTypes.filter(st => st.name === "ワンカラー（ポリッシュ）");
-    }
+  const { data: climateData } = useQuery({
+    queryKey: ["climate"],
+    queryFn: async (context) => {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject);
+      });
+      
+      return fetchClimateData(
+        position.coords.latitude,
+        position.coords.longitude
+      );
+    },
+    enabled: open,
+    retry: false
+});
 
-    return [];
-  }, [product.type]);
+  const getFilteredServiceTypes = useCallback(
+    (serviceTypes: ServiceType[]) => {
+      if (["GEL_BASE", "GEL_TOP", "GEL_COLOR"].includes(product.type)) {
+        return serviceTypes.filter((st) => st.name === "ワンカラー（ジェル）");
+      }
+
+      if (product.type === "POLISH") {
+        return serviceTypes.filter(
+          (st) => st.name === "ワンカラー（ポリッシュ）"
+        );
+      }
+
+      return [];
+    },
+    [product.type]
+  );
 
   useEffect(() => {
     if (serviceTypes && open) {
@@ -180,26 +200,30 @@ export default function ProductUsageRecordModal({
 
   const handleNailLengthChange = (nailLength: NailLength) => {
     const serviceType = serviceTypes?.find(
-      type => type.id === formData.serviceTypeId
+      (type) => type.id === formData.serviceTypeId
     );
     if (!serviceType) return;
 
     const calculations = calculateUsageAmounts(serviceType, nailLength);
-    
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
       nailLength,
       mainProduct: {
         ...prev.mainProduct,
-        amount: prev.mainProduct.isCustom ? prev.mainProduct.amount : calculations.mainAmount,
-        defaultAmount: calculations.defaultAmount
+        amount: prev.mainProduct.isCustom
+          ? prev.mainProduct.amount
+          : calculations.mainAmount,
+        defaultAmount: calculations.defaultAmount,
       },
-      relatedProducts: calculations.relatedAmounts.filter(ra => ra.productId !== product.id).map(ra => ({
-        productId: ra.productId,
-        amount: ra.amount,
-        defaultAmount: ra.defaultAmount,
-        isCustom: false
-      }))
+      relatedProducts: calculations.relatedAmounts
+        .filter((ra) => ra.productId !== product.id)
+        .map((ra) => ({
+          productId: ra.productId,
+          amount: ra.amount,
+          defaultAmount: ra.defaultAmount,
+          isCustom: false,
+        })),
     }));
   };
 
@@ -207,59 +231,69 @@ export default function ProductUsageRecordModal({
     const serviceType = serviceTypes?.find((type) => type.id === serviceTypeId);
     if (!serviceType) return;
 
-    const calculations = calculateUsageAmounts(serviceType, formData.nailLength);
+    const calculations = calculateUsageAmounts(
+      serviceType,
+      formData.nailLength
+    );
 
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       serviceTypeId,
       mainProduct: {
         productId: prev.mainProduct.productId,
         amount: calculations.mainAmount,
         defaultAmount: calculations.defaultAmount,
-        isCustom: false
+        isCustom: false,
       },
-      relatedProducts: calculations.relatedAmounts.filter(ra => ra.productId !== product.id).map(ra => ({
-        productId: ra.productId,
-        amount: ra.amount,
-        defaultAmount: ra.defaultAmount,
-        isCustom: false
-      }))
+      relatedProducts: calculations.relatedAmounts
+        .filter((ra) => ra.productId !== product.id)
+        .map((ra) => ({
+          productId: ra.productId,
+          amount: ra.amount,
+          defaultAmount: ra.defaultAmount,
+          isCustom: false,
+        })),
     }));
   };
 
   const { mutate: submitUsage, isPending } = useMutation({
     mutationFn: (data: CreateUsageRequest) => recordUsage(storeId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products', storeId] })
-      queryClient.invalidateQueries({ queryKey: ['usages', storeId] })
-      onOpenChange(false)
+      queryClient.invalidateQueries({ queryKey: ["products", storeId] });
+      queryClient.invalidateQueries({ queryKey: ["usages", storeId] });
+      onOpenChange(false);
       toast({
-        title: '使用記録を登録しました',
-        description: '使用記録の登録が完了しました。',
-      })
+        title: "使用記録を登録しました",
+        description: "使用記録の登録が完了しました。",
+      });
     },
     onError: (error) => {
-      console.error('Usage record error:', error)
+      console.error("Usage record error:", error);
       toast({
-        variant: 'destructive',
-        title: 'エラー',
-        description: '使用記録の登録に失敗しました。',
-      })
+        variant: "destructive",
+        title: "エラー",
+        description: "使用記録の登録に失敗しました。",
+      });
     },
-  })
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     submitUsage({
       ...formData,
       temperature: climateData?.temperature,
       humidity: climateData?.humidity,
-      designVariant: serviceTypes?.find(st => st.id === formData.serviceTypeId)?.designVariant
-    })
-  }
+      designVariant: serviceTypes?.find(
+        (st) => st.id === formData.serviceTypeId
+      )?.designVariant,
+    });
+  };
 
-  const filteredServiceTypes = serviceTypes ? getFilteredServiceTypes(serviceTypes) : [];
-  const selectedServiceType = filteredServiceTypes.length === 1 ? filteredServiceTypes[0] : null;
+  const filteredServiceTypes = serviceTypes
+    ? getFilteredServiceTypes(serviceTypes)
+    : [];
+  const selectedServiceType =
+    filteredServiceTypes.length === 1 ? filteredServiceTypes[0] : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -285,7 +319,7 @@ export default function ProductUsageRecordModal({
             <div className="grid w-full gap-1.5">
               <Label htmlFor="serviceType">施術タイプ</Label>
               <div className="p-2 border rounded-md bg-gray-50">
-                {selectedServiceType?.name || '施術タイプが見つかりません'}
+                {selectedServiceType?.name || "施術タイプが見つかりません"}
               </div>
             </div>
 
@@ -310,13 +344,15 @@ export default function ProductUsageRecordModal({
             {formData.serviceTypeId && (
               <div className="space-y-4 border rounded-md p-4 bg-gray-50">
                 <h4 className="font-medium">使用量</h4>
-                
+
                 {/* メイン商品の使用量 */}
                 <div className="space-y-2">
                   <Label>
                     {product.productName}
                     {formData.mainProduct.isCustom && (
-                      <span className="ml-2 text-sm text-blue-600">カスタム</span>
+                      <span className="ml-2 text-sm text-blue-600">
+                        カスタム
+                      </span>
                     )}
                   </Label>
                   <UsageAmountInput
@@ -326,13 +362,13 @@ export default function ProductUsageRecordModal({
                     maxAmount={product.capacity ?? undefined}
                     unit={product.capacityUnit ?? undefined}
                     onAmountChange={(amount, isCustom) => {
-                      setFormData(prev => ({
+                      setFormData((prev) => ({
                         ...prev,
                         mainProduct: {
                           ...prev.mainProduct,
                           amount,
-                          isCustom
-                        }
+                          isCustom,
+                        },
                       }));
                     }}
                   />
@@ -341,10 +377,10 @@ export default function ProductUsageRecordModal({
                 {/* 関連商品の使用量 */}
                 {formData.relatedProducts.map((rp, index) => {
                   const relatedProduct = serviceTypes
-                    ?.find(st => st.id === formData.serviceTypeId)
-                    ?.serviceTypeProducts
-                    .find(stp => stp.productId === rp.productId)
-                    ?.product;
+                    ?.find((st) => st.id === formData.serviceTypeId)
+                    ?.serviceTypeProducts.find(
+                      (stp) => stp.productId === rp.productId
+                    )?.product;
 
                   if (!relatedProduct) return null;
 
@@ -353,7 +389,9 @@ export default function ProductUsageRecordModal({
                       <Label>
                         {relatedProduct.productName}
                         {rp.isCustom && (
-                          <span className="ml-2 text-sm text-blue-600">カスタム</span>
+                          <span className="ml-2 text-sm text-blue-600">
+                            カスタム
+                          </span>
                         )}
                       </Label>
                       <UsageAmountInput
@@ -363,11 +401,14 @@ export default function ProductUsageRecordModal({
                         maxAmount={relatedProduct.capacity ?? undefined}
                         unit={relatedProduct.capacityUnit ?? undefined}
                         onAmountChange={(amount, isCustom) => {
-                          setFormData(prev => ({
+                          setFormData((prev) => ({
                             ...prev,
-                            relatedProducts: prev.relatedProducts.map((item, i) =>
-                              i === index ? { ...item, amount, isCustom } : item
-                            )
+                            relatedProducts: prev.relatedProducts.map(
+                              (item, i) =>
+                                i === index
+                                  ? { ...item, amount, isCustom }
+                                  : item
+                            ),
                           }));
                         }}
                       />
@@ -376,15 +417,18 @@ export default function ProductUsageRecordModal({
                 })}
 
                 {/* カスタム値の場合の調整理由入力 */}
-                {(formData.mainProduct.isCustom || formData.relatedProducts.some(rp => rp.isCustom)) && (
+                {(formData.mainProduct.isCustom ||
+                  formData.relatedProducts.some((rp) => rp.isCustom)) && (
                   <div className="space-y-2">
                     <Label>調整理由</Label>
                     <Input
-                      value={formData.adjustmentReason ?? ''}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        adjustmentReason: e.target.value
-                      }))}
+                      value={formData.adjustmentReason ?? ""}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          adjustmentReason: e.target.value,
+                        }))
+                      }
                       placeholder="使用量を調整した理由を入力してください"
                       className="bg-white"
                     />
@@ -395,16 +439,23 @@ export default function ProductUsageRecordModal({
 
             {/* 気象データの表示 */}
             {climateData && (
-              <div className="space-y-2 border rounded-md p-3 bg-blue-50">
-                <h4 className="font-medium">環境データ</h4>
+              <div className="mt-6 space-y-2 border rounded-md p-3 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-gray-500">
+                    参考データ
+                  </h4>
+                  <span className="text-xs text-gray-400">
+                    施術環境の記録用
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-600">気温</p>
-                    <p className="font-medium">{climateData.temperature}℃</p>
+                    <p className="text-xs text-gray-500">気温</p>
+                    <p className="text-sm">{climateData.temperature}℃</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">湿度</p>
-                    <p className="font-medium">{climateData.humidity}%</p>
+                    <p className="text-xs text-gray-500">湿度</p>
+                    <p className="text-sm">{climateData.humidity}%</p>
                   </div>
                 </div>
               </div>
@@ -449,12 +500,12 @@ export default function ProductUsageRecordModal({
                 variant="default"
                 disabled={isPending || !formData.serviceTypeId}
               >
-                {isPending ? '登録中...' : '登録'}
+                {isPending ? "登録中..." : "登録"}
               </Button>
             </div>
           </form>
         )}
       </DialogContent>
     </Dialog>
-  )
+  );
 }
