@@ -10,6 +10,7 @@ export type QueryKeys = {
   predictions: ['predictions', string]
   statistics: ['statistics', string, string] // storeId, serviceTypeId
   productStatistics: ['productStatistics', string, number, number]
+  serviceTypeStatistics: ['serviceTypeStatistics', string, number?, number?]
 }
 
 export type Store = {
@@ -270,4 +271,34 @@ export interface ProductStatisticsResponse {
   statistics: ProductStatistics[];
   totalProducts: number;
   hasNextPage: boolean;
+}
+
+export interface ColorUsageStatistics {
+  productId: string;
+  productName: string;
+  colorName: string;
+  colorCode: string;
+  usageCount: number;
+  totalAmount: number;
+}
+
+export interface MonthlyColorTrend {
+  month: string;
+  usageCount: number;
+  popularColors: Array<{
+    colorName: string;
+    usageCount: number;
+  }>;
+}
+
+export interface ServiceTypeStatistics {
+  serviceTypeId: string;
+  serviceName: string;
+  totalUsageCount: number;
+  colorUsage: ColorUsageStatistics[];
+  monthlyTrend?: MonthlyColorTrend[];
+}
+
+export interface ServiceTypeStatisticsResponse {
+  statistics: ServiceTypeStatistics[];
 }

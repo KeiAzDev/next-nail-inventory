@@ -1,5 +1,5 @@
 import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse, CreateUsageRequest, ClimateData,
-  StatisticsResponse, ProductStatisticsResponse
+  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse
 } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
@@ -212,6 +212,26 @@ export async function fetchProductStatistics(
 
   if (!response.ok) {
     throw new Error('Failed to fetch product statistics');
+  }
+
+  return response.json();
+}
+
+export async function fetchServiceTypeStatistics(
+  storeId: string,
+  year?: number,
+  month?: number
+): Promise<ServiceTypeStatisticsResponse> {
+  const searchParams = new URLSearchParams();
+  if (year) searchParams.set('year', year.toString());
+  if (month) searchParams.set('month', month.toString());
+
+  const response = await fetch(
+    `/api/stores/${storeId}/statistics/service-types?${searchParams.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch service type statistics');
   }
 
   return response.json();
