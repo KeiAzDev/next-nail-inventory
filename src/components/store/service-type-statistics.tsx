@@ -1,10 +1,11 @@
 // src/components/store/service-type-statistics.tsx
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { fetchServiceTypeStatistics } from '@/lib/api-client';
+import { DateRangeFilter } from './statistics/date-range-filter';
 
 interface ServiceTypeStatisticsProps {
   storeId: string;
@@ -35,16 +36,52 @@ interface ServiceTypeStats {
 }
 
 export default function ServiceTypeStatistics({ storeId }: ServiceTypeStatisticsProps) {
+  // 現在の年月を取得してYYYY-MM形式に変換
+  const currentDate = new Date();
+  const currentYearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+  // 期間選択のstate
+  const [rangeType, setRangeType] = useState<'single' | 'range'>('single');
+  const [startDate, setStartDate] = useState<string>(currentYearMonth);
+  const [endDate, setEndDate] = useState<string | undefined>(undefined);
+
+  // APIクエリ
   const { data, isLoading } = useQuery({
-    queryKey: ['serviceTypeStatistics', storeId],
-    queryFn: () => fetchServiceTypeStatistics(storeId),
+    queryKey: ['serviceTypeStatistics', storeId, startDate, endDate],
+    queryFn: () => fetchServiceTypeStatistics(storeId, {
+      startDate,
+      endDate
+    }),
     staleTime: 1000 * 60 * 30,  // 30分
     gcTime: 1000 * 60 * 60,     // 1時間
   });
 
+  // 期間タイプの変更ハンドラ
+  const handleRangeTypeChange = (type: 'single' | 'range') => {
+    setRangeType(type);
+    if (type === 'single') {
+      setEndDate(undefined);
+    }
+  };
+
+  // 日付変更ハンドラ
+  const handleDateChange = (start: string, end?: string) => {
+    setStartDate(start);
+    if (rangeType === 'range') {
+      setEndDate(end);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
+        <DateRangeFilter
+          startDate={startDate}
+          endDate={endDate}
+          rangeType={rangeType}
+          onRangeTypeChange={handleRangeTypeChange}
+          onDateChange={handleDateChange}
+        />
         {[1, 2].map((i) => (
           <Card key={i}>
             <CardHeader>
@@ -61,6 +98,14 @@ export default function ServiceTypeStatistics({ storeId }: ServiceTypeStatistics
 
   return (
     <div className="space-y-6">
+      <DateRangeFilter
+        startDate={startDate}
+        endDate={endDate}
+        rangeType={rangeType}
+        onRangeTypeChange={handleRangeTypeChange}
+        onDateChange={handleDateChange}
+      />
+
       {data?.statistics.map((stat: ServiceTypeStats) => (
         <Card key={stat.serviceTypeId}>
           <CardHeader>

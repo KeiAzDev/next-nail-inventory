@@ -10,8 +10,13 @@ export async function GET(request: NextRequest) {
     const storeId = request.nextUrl.pathname.split("/")[3];
     const searchParams = request.nextUrl.searchParams;
     
+    // 従来のパラメータ
     const year = parseInt(searchParams.get("year") || new Date().getFullYear().toString());
     const month = parseInt(searchParams.get("month") || (new Date().getMonth() + 1).toString());
+    
+    // 新しい期間パラメータ
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
     if (!storeId) {
       return NextResponse.json(
@@ -31,8 +36,19 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. 期間の設定
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
+    let start: Date;
+    let end: Date;
+
+    if (startDate && endDate) {
+      // カスタム期間が指定された場合
+      start = new Date(startDate);
+      end = new Date(endDate);
+      end.setMonth(end.getMonth() + 1, 0); // 月末に設定
+    } else {
+      // 従来のyear, monthパラメータを使用
+      start = new Date(year, month - 1, 1);
+      end = new Date(year, month, 0);
+    }
 
     // 4. データ取得
     const serviceTypes = await prisma.serviceType.findMany({
@@ -41,8 +57,8 @@ export async function GET(request: NextRequest) {
         usages: {
           where: {
             date: {
-              gte: startDate,
-              lte: endDate
+              gte: start,
+              lte: end
             }
           },
           include: {

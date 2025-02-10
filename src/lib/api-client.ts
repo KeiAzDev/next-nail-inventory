@@ -219,12 +219,26 @@ export async function fetchProductStatistics(
 
 export async function fetchServiceTypeStatistics(
   storeId: string,
-  year?: number,
-  month?: number
+  options?: {
+    startDate?: string;
+    endDate?: string;
+    year?: number;
+    month?: number;
+  }
 ): Promise<ServiceTypeStatisticsResponse> {
   const searchParams = new URLSearchParams();
-  if (year) searchParams.set('year', year.toString());
-  if (month) searchParams.set('month', month.toString());
+  
+  if (options) {
+    const { startDate, endDate, year, month } = options;
+    
+    // 新しい期間指定パラメータ
+    if (startDate) searchParams.set('startDate', startDate);
+    if (endDate) searchParams.set('endDate', endDate);
+    
+    // 従来のパラメータも維持
+    if (year) searchParams.set('year', year.toString());
+    if (month) searchParams.set('month', month.toString());
+  }
 
   const response = await fetch(
     `/api/stores/${storeId}/statistics/service-types?${searchParams.toString()}`
