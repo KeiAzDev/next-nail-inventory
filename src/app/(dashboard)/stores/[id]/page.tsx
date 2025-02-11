@@ -18,12 +18,12 @@ export default async function StorePage({ params }: PageProps) {
   await validateStoreAccess(resolvedParams.id)
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="container mx-auto space-y-6 p-4 lg:p-6">
       <Suspense fallback={<LoadingSpinner />}>
         <StoreHeader storeId={resolvedParams.id} />
       </Suspense>
       
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 xl:gap-8">
         <Suspense fallback={<LoadingSpinner />}>
           <StoreInventory storeId={resolvedParams.id} />
         </Suspense>

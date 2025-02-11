@@ -302,3 +302,13 @@ export interface ServiceTypeStatistics {
 export interface ServiceTypeStatisticsResponse {
   statistics: ServiceTypeStatistics[];
 }
+
+export type UpdateStaffRequest = {
+  name?: string
+  email?: string
+  password?: string
+}
+
+export type UpdateStaffRoleRequest = {
+  role: 'MANAGER' | 'STAFF'
+}

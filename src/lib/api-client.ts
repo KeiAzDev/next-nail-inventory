@@ -1,5 +1,5 @@
 import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse, CreateUsageRequest, ClimateData,
-  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse
+  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse, UpdateStaffRoleRequest, UpdateStaffRequest
 } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
@@ -249,4 +249,57 @@ export async function fetchServiceTypeStatistics(
   }
 
   return response.json();
+}
+
+export async function updateStaffDetails(
+  storeId: string,
+  staffId: string,
+  data: UpdateStaffRequest
+): Promise<StaffMember> {
+  const response = await fetch(`/api/stores/${storeId}/staff/${staffId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to update staff details')
+  }
+
+  return response.json()
+}
+
+export async function updateStaffRole(
+  storeId: string,
+  staffId: string,
+  data: UpdateStaffRoleRequest
+): Promise<StaffMember> {
+  const response = await fetch(`/api/stores/${storeId}/staff/${staffId}/role`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to update staff role')
+  }
+
+  return response.json()
+}
+
+export async function deleteStaffMember(
+  storeId: string,
+  staffId: string
+): Promise<void> {
+  const response = await fetch(`/api/stores/${storeId}/staff/${staffId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to delete staff member')
+  }
 }
