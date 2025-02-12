@@ -11,6 +11,8 @@ export type QueryKeys = {
   statistics: ['statistics', string, string] // storeId, serviceTypeId
   productStatistics: ['productStatistics', string, number, number]
   serviceTypeStatistics: ['serviceTypeStatistics', string, number?, number?]
+  staffProfile: ['staffProfile', string, string] // storeId, staffId
+  staffActivities: ['staffActivities', string, string] // storeId, staffId
 }
 
 export type Store = {
@@ -73,9 +75,28 @@ export type StaffMember = {
   email: string
   name: string
   role: 'ADMIN' | 'MANAGER' | 'STAFF'
+  image?: string | null
+  phone?: string | null
+  shifts?: {
+    [key: string]: {
+      start?: string
+      end?: string
+      isOff?: boolean
+    }
+  } | null
+  area?: string | null
   storeId: string
   createdAt: string
   updatedAt: string
+}
+
+export type Activity = {
+  id: string
+  userId: string
+  type: string
+  action: string
+  metadata?: Record<string, any> | null
+  createdAt: string
 }
 
 export type NailLength = 'SHORT' | 'MEDIUM' | 'LONG'
@@ -311,4 +332,48 @@ export type UpdateStaffRequest = {
 
 export type UpdateStaffRoleRequest = {
   role: 'MANAGER' | 'STAFF'
+}
+
+export type UpdateStaffProfileRequest = {
+  name?: string
+  image?: string | null
+  phone?: string | null
+  shifts?: {
+    monday?: {
+      start?: string
+      end?: string
+      isOff?: boolean
+    }
+    tuesday?: {
+      start?: string
+      end?: string
+      isOff?: boolean
+    }
+    wednesday?: {
+      start?: string
+      end?: string
+      isOff?: boolean
+    }
+    thursday?: {
+      start?: string
+      end?: string
+      isOff?: boolean
+    }
+    friday?: {
+      start?: string
+      end?: string
+      isOff?: boolean
+    }
+    saturday?: {
+      start?: string
+      end?: string
+      isOff?: boolean
+    }
+    sunday?: {
+      start?: string
+      end?: string
+      isOff?: boolean
+    }
+  } | null
+  area?: string | null
 }

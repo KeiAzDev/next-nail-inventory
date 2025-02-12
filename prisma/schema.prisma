@@ -60,6 +60,22 @@ model User {
   deletedAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  image       String?
+  phone       String?
+  shifts      Json? 
+  area        String?
+  activities  Activity[]
+}
+
+model Activity {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  type      String   // LOGIN, LOGOUT, INVENTORY, STAFF_MANAGE など
+  action    String   
+  metadata  Json?    // 任意の追加情報
+  createdAt DateTime @default(now())
 }
 
 model Product {

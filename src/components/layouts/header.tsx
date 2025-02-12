@@ -1,27 +1,29 @@
-'use client'
+"use client";
 
-import { useSession, signOut } from 'next-auth/react'
-import Link from 'next/link'
-import { useState } from 'react'
+import { useSession, signOut } from "next-auth/react";
+import Link from "next/link";
+import { useState } from "react";
 
 export default function Header() {
-  const { data: session } = useSession()
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const { data: session } = useSession();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   return (
     <header className="bg-white shadow">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-          {session?.user?.storeId ? (
-              <Link 
+            {session?.user?.storeId ? (
+              <Link
                 href={`/stores/${session.user.storeId}`}
                 className="text-xl font-semibold hover:text-gray-600 transition-colors"
               >
                 Inventory Management
               </Link>
             ) : (
-              <h1 className="text-xl font-semibold">Inventory Management (No Name)</h1>
+              <h1 className="text-xl font-semibold">
+                Inventory Management (No Name)
+              </h1>
             )}
           </div>
 
@@ -34,7 +36,7 @@ export default function Header() {
                 <span className="sr-only">ユーザーメニュー</span>
                 <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center">
                   <span className="text-white font-medium">
-                    {session?.user?.name?.[0]?.toUpperCase() || 'U'}
+                    {session?.user?.name?.[0]?.toUpperCase() || "U"}
                   </span>
                 </div>
               </button>
@@ -46,6 +48,14 @@ export default function Header() {
                       {session?.user?.name}
                     </div>
                     <div className="border-t border-gray-100"></div>
+                    {/* プロフィールページへのリンクを追加 */}
+                    <Link
+                      href="/profile"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsUserMenuOpen(false)} // メニューを閉じる
+                    >
+                      プロフィール設定
+                    </Link>
                     <button
                       onClick={() => signOut()}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -61,5 +71,5 @@ export default function Header() {
         </div>
       </div>
     </header>
-  )
+  );
 }

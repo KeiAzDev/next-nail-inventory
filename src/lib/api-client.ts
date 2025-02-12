@@ -1,5 +1,5 @@
 import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse, CreateUsageRequest, ClimateData,
-  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse, UpdateStaffRoleRequest, UpdateStaffRequest
+  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse, UpdateStaffRoleRequest, UpdateStaffRequest, UpdateStaffProfileRequest
 } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
@@ -302,4 +302,31 @@ export async function deleteStaffMember(
   if (!response.ok) {
     throw new Error('Failed to delete staff member')
   }
+}
+
+export async function fetchStaffProfile(storeId: string, staffId: string) {
+  const response = await fetch(`/api/stores/${storeId}/staff/${staffId}/profile`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch staff profile')
+  }
+  return response.json()
+}
+
+export async function updateStaffProfile(
+  storeId: string, 
+  staffId: string, 
+  data: UpdateStaffProfileRequest
+) {
+  const response = await fetch(
+    `/api/stores/${storeId}/staff/${staffId}/profile`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }
+  )
+  if (!response.ok) {
+    throw new Error('Failed to update staff profile')
+  }
+  return response.json()
 }
