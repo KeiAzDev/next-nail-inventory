@@ -1,5 +1,5 @@
 import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse, CreateUsageRequest, ClimateData,
-  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse, UpdateStaffRoleRequest, UpdateStaffRequest, UpdateStaffProfileRequest
+  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse, UpdateStaffRoleRequest, UpdateStaffRequest, UpdateStaffProfileRequest, ActivityResponse
 } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
@@ -328,5 +328,28 @@ export async function updateStaffProfile(
   if (!response.ok) {
     throw new Error('Failed to update staff profile')
   }
+  return response.json()
+}
+
+export async function fetchStaffActivities(
+  storeId: string,
+  staffId: string,
+  options?: {
+    page?: number;
+    limit?: number;
+  }
+): Promise<ActivityResponse> {
+  const searchParams = new URLSearchParams()
+  if (options?.page) searchParams.set('page', options.page.toString())
+  if (options?.limit) searchParams.set('limit', options.limit.toString())
+
+  const response = await fetch(
+    `/api/stores/${storeId}/staff/${staffId}/activities?${searchParams.toString()}`
+  )
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch staff activities')
+  }
+  
   return response.json()
 }

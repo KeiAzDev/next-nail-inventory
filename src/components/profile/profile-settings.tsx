@@ -5,13 +5,11 @@ import { useSession } from 'next-auth/react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { fetchStaffProfile, updateStaffProfile } from '@/lib/api-client'
 import type { UpdateStaffProfileRequest } from '@/types/api'
 import ProfileActivityLog from './profile-activity-log'
-import ShiftSettings from './shift-settings'
 
 export default function ProfileSettings() {
   const { data: session } = useSession()
@@ -57,39 +55,8 @@ export default function ProfileSettings() {
               onChange={(e) => updateProfile({ name: e.target.value })}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="phone">電話番号</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={profile?.phone || ''}
-              onChange={(e) => updateProfile({ phone: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="area">担当エリア</Label>
-            <Input
-              id="area"
-              value={profile?.area || ''}
-              onChange={(e) => updateProfile({ area: e.target.value })}
-            />
-          </div>
         </CardContent>
       </Card>
-
-      {/* シフト情報 */}
-      <Card>
-  <CardHeader>
-    <CardTitle>シフト情報</CardTitle>
-  </CardHeader>
-  <CardContent>
-    <ShiftSettings
-      currentShifts={profile?.shifts ?? {}}
-      onUpdate={(shifts) => updateProfile({ shifts })}
-    />
-  </CardContent>
-</Card>
-
 
       {/* アクティビティログ */}
       <ProfileActivityLog />

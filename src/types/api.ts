@@ -377,3 +377,13 @@ export type UpdateStaffProfileRequest = {
   } | null
   area?: string | null
 }
+
+export interface ActivityResponse {
+  activities: Activity[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
