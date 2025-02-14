@@ -112,6 +112,15 @@ export async function POST(
         throw new Error('在庫が不足しています')
       }
 
+      // サービスタイプの取得
+      const serviceType = await tx.serviceType.findUnique({
+        where: { id: body.serviceTypeId }
+      })
+
+      if (!serviceType) {
+        throw new Error('施術タイプが見つかりません')
+      }
+
       // 関連商品のチェック
       for (const relatedProduct of body.relatedProducts) {
         const product = await tx.product.findUnique({
@@ -167,6 +176,27 @@ export async function POST(
             include: {
               product: true
             }
+          }
+        }
+      })
+
+      // アクティビティログの記録
+      await tx.activity.create({
+        data: {
+          userId: session.user.id,  // userの代わりにuserIdを直接指定
+          type: 'PRODUCT_USE',
+          action: '商品使用記録',
+          metadata: {
+            productName: mainProduct.productName,
+            amount: body.mainProduct.amount,
+            unit: mainProduct.capacityUnit,
+            serviceTypeName: serviceType.name,
+            isCustomAmount: body.mainProduct.isCustom,
+            relatedProducts: body.relatedProducts.map((rp) => ({
+              productId: rp.productId,
+              amount: rp.amount,
+              isCustomAmount: rp.isCustom
+            }))
           }
         }
       })

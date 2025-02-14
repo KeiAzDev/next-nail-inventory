@@ -9,6 +9,51 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { Activity } from '@/types/api'
 
+interface ProductUseMetadata {
+  productName: string
+  amount: number
+  unit: string | null
+  serviceTypeName: string
+  isCustomAmount: boolean
+  relatedProducts: Array<{
+    productId: string
+    amount: number
+    isCustomAmount: boolean
+  }>
+}
+
+interface ProductUpdateMetadata {
+  productName: string
+  brand: string
+  capacityUnit?: string
+  updates: {
+    productName?: { old: string; new: string }
+    brand?: { old: string; new: string }
+    colorName?: { old: string; new: string }
+    price?: { old: number; new: number }
+    capacity?: { old: number | null; new: number | null }
+    capacityUnit?: { old: string | null; new: string | null }
+  }
+}
+
+interface ProductCreateMetadata {
+  productName: string
+  brand: string
+  type: string
+  colorName: string
+  capacity: number | null
+  capacityUnit: string | null
+  quantity: number
+}
+
+interface ProductDeleteMetadata {
+  productName: string
+  brand: string
+  type: string
+  colorName: string
+  deletedAt: string
+}
+
 export default function ProfileActivityLog() {
   const { data: session } = useSession()
   const [page, setPage] = useState(1)
@@ -22,14 +67,67 @@ export default function ProfileActivityLog() {
 
   const formatActivityMessage = (activity: Activity) => {
     switch (activity.type) {
-      case 'PRODUCT_USE':
-        return `${activity.metadata?.productName}を使用しました（${activity.metadata?.amount}${activity.metadata?.unit}）`
-      case 'PRODUCT_CREATE':
-        return `商品「${activity.metadata?.productName}」を登録しました`
-      case 'PRODUCT_UPDATE':
-        return `商品「${activity.metadata?.productName}」を更新しました`
-      case 'PRODUCT_DELETE':
-        return `商品「${activity.metadata?.productName}」を削除しました`
+      case 'PRODUCT_USE': {
+        const metadata = activity.metadata as ProductUseMetadata | undefined
+        if (!metadata) return activity.action
+  
+        const mainMessage = `${metadata.productName}を使用しました（${metadata.amount}${metadata.unit}）`
+        
+        if (metadata.relatedProducts.length > 0) {
+          const relatedMessage = `関連商品: ${metadata.relatedProducts
+            .map(rp => `${rp.amount}${metadata.unit}`)
+            .join(', ')}`
+          return `${mainMessage} ${relatedMessage}`
+        }
+        
+        return mainMessage
+      }
+  
+      case 'PRODUCT_CREATE': {
+        const metadata = activity.metadata as ProductCreateMetadata | undefined
+        if (!metadata) return activity.action
+  
+        return `${metadata.brand} ${metadata.productName}を登録しました（${metadata.quantity}個）`
+      }
+  
+      case 'PRODUCT_UPDATE': {
+        const metadata = activity.metadata as ProductUpdateMetadata | undefined
+        if (!metadata?.updates || Object.keys(metadata.updates).length === 0) {
+          return `${metadata?.productName || '商品'}を更新しました`
+        }
+  
+        const updateDetails = Object.entries(metadata.updates)
+          .map(([field, value]) => {
+            if (!value) return null
+            
+            switch (field) {
+              case 'productName':
+                return `商品名を「${value.old}」から「${value.new}」に変更`
+              case 'brand':
+                return `ブランドを「${value.old}」から「${value.new}」に変更`
+              case 'colorName':
+                return `カラー名を「${value.old}」から「${value.new}」に変更`
+              case 'price':
+                return `価格を${value.old}円から${value.new}円に変更`
+              case 'capacity':
+                return `容量を${value.old}から${value.new}${metadata.capacityUnit}に変更`
+              default:
+                return null
+            }
+          })
+          .filter((detail): detail is string => detail !== null)
+          .join('、')
+  
+        return `${metadata.productName}を更新しました（${updateDetails}）`
+      }
+  
+      case 'PRODUCT_DELETE': {
+        const metadata = activity.metadata as ProductDeleteMetadata | undefined
+        if (!metadata) return activity.action
+  
+        return `${metadata.brand} ${metadata.productName}（${metadata.colorName}）を削除しました`
+      }
+  
       default:
         return activity.action
     }
