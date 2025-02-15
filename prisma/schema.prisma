@@ -44,6 +44,9 @@ model Store {
   users         User[]    
   serviceTypes  ServiceType[]
   invitations   Invitation[]
+  maxStoreConnections    Int          @default(30)  // 店舗全体の最大同時接続数
+  maxUserConnections     Int          @default(3)   // ユーザーごとの最大同時接続数
+  sessions              UserSession[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -66,6 +69,36 @@ model User {
   shifts      Json? 
   area        String?
   activities  Activity[]
+
+  sessions     UserSession[]
+  lastLogin    DateTime?
+  loginCount   Int       @default(0)
+}
+
+model UserSession {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String    @db.ObjectId
+  store         Store     @relation(fields: [storeId], references: [id])
+  storeId       String    @db.ObjectId
+  
+  // セッション管理
+  token         String    @unique
+  isActive      Boolean   @default(true)
+  lastActivity  DateTime  @updatedAt
+  expiresAt     DateTime
+  
+  // デバイス情報
+  device        String?   // デバイスの種類（PC, Mobile等）
+  browser       String?   // ブラウザ情報
+  ipAddress     String?   // IPアドレス
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, isActive])
+  @@index([storeId, isActive])
+  @@index([token, isActive])
 }
 
 model Activity {
