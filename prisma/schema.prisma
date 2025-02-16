@@ -44,8 +44,8 @@ model Store {
   users         User[]    
   serviceTypes  ServiceType[]
   invitations   Invitation[]
-  maxStoreConnections    Int          @default(30)  // 店舗全体の最大同時接続数
-  maxUserConnections     Int          @default(3)   // ユーザーごとの最大同時接続数
+  maxStoreConnections    Int          @default(50)  // 店舗全体の最大同時接続数
+  maxUserConnections     Int          @default(5)   // ユーザーごとの最大同時接続数
   sessions              UserSession[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

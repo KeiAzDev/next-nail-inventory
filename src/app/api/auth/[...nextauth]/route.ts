@@ -152,7 +152,20 @@ export const authOptions: NextAuthOptions = {
     maxAge: 24 * 60 * 60 // 24時間
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development'
+  logger: {
+    error(code, ...message) {
+      console.error(code, ...message)
+    },
+    warn(code, ...message) {
+      console.warn(code, ...message)
+    },
+    debug(code, ...message) {
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(code, ...message)
+      }
+    }
+  },
+  debug: false
 }
 
 const handler = NextAuth(authOptions)

@@ -1,16 +1,10 @@
 // src/lib/session-manager.ts
 import { prisma } from './prisma'
 import type { PrismaClient } from '@prisma/client'
-import { randomBytes } from 'crypto'
-import { promisify } from 'util'
 import { SessionError } from './errors'
 
-const randomBytesAsync = promisify(randomBytes)
-
-type TransactionClient = Omit<
-  PrismaClient,
-  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
->
+type PrismaTransactionMethods = '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+type TransactionClient = Omit<PrismaClient, PrismaTransactionMethods>
 
 interface SessionInfo {
   device?: string
@@ -21,8 +15,8 @@ export class SessionManager {
   private readonly storeId: string
   private readonly ACTIVITY_UPDATE_THRESHOLD = 5 * 60 * 1000 // 5分
   private readonly SESSION_DURATION = 24 * 60 * 60 * 1000    // 24時間
-  private readonly STORE_SESSION_LIMIT = 30
-  private readonly USER_SESSION_LIMIT = 3
+  private readonly STORE_SESSION_LIMIT = 50
+  private readonly USER_SESSION_LIMIT = 5
 
   constructor(storeId: string) {
     this.storeId = storeId
@@ -31,6 +25,9 @@ export class SessionManager {
   async createSession(userId: string, info?: SessionInfo) {
     try {
       console.log('Creating session for user:', userId)
+      
+      // 古いセッションをクリーンアップ
+      await this.cleanupOldSessions(userId)
       
       const token = await this.generateSecureToken()
 
@@ -57,14 +54,21 @@ export class SessionManager {
           throw error
         }
 
+        // ユーザーセッション数のチェック（クリーンアップ後の再チェック）
         if (userCount >= this.USER_SESSION_LIMIT) {
-          const error = new SessionError(
-            'ユーザーの最大接続数に達しました',
-            'USER_SESSION_LIMIT_EXCEEDED',
-            429
-          )
-          console.error('User session limit exceeded:', error)
-          throw error
+          console.warn('User has reached session limit, cleaning up old sessions')
+          
+          // クリーンアップ後の再チェック
+          const updatedUserCount = await this.getUserActiveSessions(tx, userId)
+          if (updatedUserCount >= this.USER_SESSION_LIMIT) {
+            const error = new SessionError(
+              'ユーザーの最大接続数に達しました。他のデバイスからログアウトしてください。',
+              'USER_SESSION_LIMIT_EXCEEDED',
+              429
+            )
+            console.error('User session limit exceeded:', error)
+            throw error
+          }
         }
 
         const session = await tx.userSession.create({
@@ -116,11 +120,15 @@ export class SessionManager {
         return false
       }
 
+      // アクティビティの更新と有効期限の延長
       const lastActivityThreshold = new Date(Date.now() - this.ACTIVITY_UPDATE_THRESHOLD)
       if (session.lastActivity < lastActivityThreshold) {
         await prisma.userSession.update({
           where: { token },
-          data: { lastActivity: new Date() }
+          data: { 
+            lastActivity: new Date(),
+            expiresAt: new Date(Date.now() + this.SESSION_DURATION)
+          }
         })
       }
 
@@ -165,11 +173,45 @@ export class SessionManager {
     }
   }
 
+  private async cleanupOldSessions(userId: string): Promise<void> {
+    try {
+      // アクティブなセッションを取得（最終アクティビティの降順）
+      const activeSessions = await prisma.userSession.findMany({
+        where: {
+          userId,
+          isActive: true
+        },
+        orderBy: {
+          lastActivity: 'desc'
+        }
+      })
+
+      // 最新の2つ以外のセッションを無効化
+      if (activeSessions.length > 4) {
+        const sessionsToDeactivate = activeSessions.slice(4)
+        await prisma.userSession.updateMany({
+          where: {
+            id: {
+              in: sessionsToDeactivate.map(session => session.id)
+            }
+          },
+          data: {
+            isActive: false
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Session cleanup error:', error)
+    }
+  }
+
   private async generateSecureToken(): Promise<string> {
     try {
-      const buffer = await randomBytesAsync(32)
-      return buffer.toString('hex')
+      const array = new Uint8Array(32)
+      crypto.getRandomValues(array)
+      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
     } catch (error) {
+      console.error('Token generation error:', error)
       throw new SessionError(
         'セキュアトークンの生成に失敗しました',
         'INVALID_SESSION',
