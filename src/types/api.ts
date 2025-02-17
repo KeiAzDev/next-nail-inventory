@@ -13,6 +13,7 @@ export type QueryKeys = {
   serviceTypeStatistics: ['serviceTypeStatistics', string, number?, number?]
   staffProfile: ['staffProfile', string, string] // storeId, staffId
   staffActivities: ['staffActivities', string, string] // storeId, staffId
+  sessionStatistics: ['sessionStatistics', string] // storeId
 }
 
 export type Store = {
@@ -386,4 +387,31 @@ export interface ActivityResponse {
     limit: number;
     totalPages: number;
   };
+}
+
+export interface SessionDeviceStats {
+  deviceType: string;
+  count: number;
+  percentage: number;
+}
+
+export interface SessionBrowserStats {
+  browser: string;
+  count: number;
+  percentage: number;
+}
+
+export interface SessionActivityStats {
+  timestamp: string;
+  type: string;
+  count: number;
+}
+
+export interface SessionStatistics {
+  totalSessions: number;
+  activeSessions: number;
+  deviceStats: SessionDeviceStats[];
+  browserStats: SessionBrowserStats[];
+  recentActivities: SessionActivityStats[];
+  lastUpdated: string;
 }

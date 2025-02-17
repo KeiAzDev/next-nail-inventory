@@ -1,5 +1,5 @@
 import type { Store, Product, StaffMember, ServiceType, Usage, NailLength, CreateInvitationRequest, CreateInvitationResponse, Invitation, ValidateInvitationResponse, CreateUsageRequest, ClimateData,
-  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse, UpdateStaffRoleRequest, UpdateStaffRequest, UpdateStaffProfileRequest, ActivityResponse
+  StatisticsResponse, ProductStatisticsResponse, ServiceTypeStatisticsResponse, UpdateStaffRoleRequest, UpdateStaffRequest, UpdateStaffProfileRequest, ActivityResponse, SessionStatistics
 } from '@/types/api'
 
 export async function fetchStoreDetails(storeId: string): Promise<Store> {
@@ -352,4 +352,49 @@ export async function fetchStaffActivities(
   }
   
   return response.json()
+}
+
+export async function fetchSessionStatistics(
+  storeId: string,
+  options?: {
+    from?: string;    // ISO文字列形式の日時
+    to?: string;      // ISO文字列形式の日時
+  }
+): Promise<SessionStatistics> {
+  const searchParams = new URLSearchParams();
+  
+  if (options) {
+    if (options.from) searchParams.set('from', options.from);
+    if (options.to) searchParams.set('to', options.to);
+  }
+
+  const response = await fetch(
+    `/api/stores/${storeId}/sessions/statistics?${searchParams.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch session statistics');
+  }
+
+  return response.json();
+}
+
+export async function checkSessionAnomalies(
+  storeId: string
+): Promise<{
+  hasAnomalies: boolean;
+  anomalies: {
+    type: string;
+    description: string;
+    severity: 'low' | 'medium' | 'high';
+    detectedAt: string;
+  }[];
+}> {
+  const response = await fetch(`/api/stores/${storeId}/sessions/monitoring`);
+
+  if (!response.ok) {
+    throw new Error('Failed to check session anomalies');
+  }
+
+  return response.json();
 }
