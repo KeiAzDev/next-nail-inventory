@@ -13,10 +13,10 @@ interface SessionInfo {
 
 export class SessionManager {
   private readonly storeId: string
-  private readonly ACTIVITY_UPDATE_THRESHOLD = 5 * 60 * 1000 // 5分
-  private readonly SESSION_DURATION = 24 * 60 * 60 * 1000    // 24時間
-  private readonly STORE_SESSION_LIMIT = 50
-  private readonly USER_SESSION_LIMIT = 5
+  private readonly ACTIVITY_UPDATE_THRESHOLD = 5 * 60 * 1000  // 5分
+  private readonly SESSION_DURATION = 24 * 60 * 60 * 1000     // 24時間
+  private readonly MAX_CONNECTED_STORES = 50                  // システム全体での最大店舗数
+  private readonly MAX_USERS_PER_STORE = 5                   // 1店舗あたりの最大ユーザー数
 
   constructor(storeId: string) {
     this.storeId = storeId
@@ -24,7 +24,7 @@ export class SessionManager {
 
   async createSession(userId: string, info?: SessionInfo) {
     try {
-      console.log('Creating session for user:', userId)
+      console.log('Creating session for user:', userId, 'in store:', this.storeId)
       
       // 古いセッションをクリーンアップ
       await this.cleanupOldSessions(userId)
@@ -32,43 +32,32 @@ export class SessionManager {
       const token = await this.generateSecureToken()
 
       return await prisma.$transaction(async (tx) => {
-        const [storeCount, userCount] = await Promise.all([
-          this.getStoreActiveSessions(tx),
-          this.getUserActiveSessions(tx, userId)
-        ])
+        // システム全体での接続店舗数をチェック
+        const connectedStores = await this.getConnectedStoresCount(tx)
+        console.log('Connected stores:', connectedStores, 'of', this.MAX_CONNECTED_STORES)
 
-        console.log('Active sessions:', {
-          storeCount,
-          userCount,
-          storeLimit: this.STORE_SESSION_LIMIT,
-          userLimit: this.USER_SESSION_LIMIT
-        })
-
-        if (storeCount >= this.STORE_SESSION_LIMIT) {
+        if (connectedStores >= this.MAX_CONNECTED_STORES) {
           const error = new SessionError(
-            '店舗の最大接続数に達しました',
-            'SESSION_LIMIT_EXCEEDED',
+            'システムの最大接続店舗数に達しました',
+            'STORE_LIMIT_EXCEEDED',
             429
           )
-          console.error('Store session limit exceeded:', error)
+          console.error('System-wide store limit exceeded:', error)
           throw error
         }
 
-        // ユーザーセッション数のチェック（クリーンアップ後の再チェック）
-        if (userCount >= this.USER_SESSION_LIMIT) {
-          console.warn('User has reached session limit, cleaning up old sessions')
-          
-          // クリーンアップ後の再チェック
-          const updatedUserCount = await this.getUserActiveSessions(tx, userId)
-          if (updatedUserCount >= this.USER_SESSION_LIMIT) {
-            const error = new SessionError(
-              'ユーザーの最大接続数に達しました。他のデバイスからログアウトしてください。',
-              'USER_SESSION_LIMIT_EXCEEDED',
-              429
-            )
-            console.error('User session limit exceeded:', error)
-            throw error
-          }
+        // 店舗あたりのアクティブユーザー数をチェック
+        const activeStoreUsers = await this.getActiveStoreUsersCount(tx, this.storeId)
+        console.log('Active users in store:', activeStoreUsers, 'of', this.MAX_USERS_PER_STORE)
+
+        if (activeStoreUsers >= this.MAX_USERS_PER_STORE) {
+          const error = new SessionError(
+            'この店舗の最大接続ユーザー数に達しました',
+            'STORE_USER_LIMIT_EXCEEDED',
+            429
+          )
+          console.error('Store user limit exceeded:', error)
+          throw error
         }
 
         const session = await tx.userSession.create({
@@ -84,7 +73,12 @@ export class SessionManager {
           }
         })
 
-        console.log('Session created:', session)
+        console.log('Session created successfully:', {
+          sessionId: session.id,
+          userId,
+          storeId: this.storeId
+        })
+        
         return session
       })
     } catch (error) {
@@ -173,33 +167,43 @@ export class SessionManager {
     }
   }
 
+  private async getConnectedStoresCount(tx: TransactionClient): Promise<number> {
+    const connectedStores = await tx.userSession.groupBy({
+      by: ['storeId'],
+      where: {
+        isActive: true
+      }
+    })
+    return connectedStores.length
+  }
+
+  private async getActiveStoreUsersCount(tx: TransactionClient, storeId: string): Promise<number> {
+    const activeUsers = await tx.userSession.groupBy({
+      by: ['userId'],
+      where: {
+        storeId,
+        isActive: true
+      }
+    })
+    return activeUsers.length
+  }
+
   private async cleanupOldSessions(userId: string): Promise<void> {
     try {
-      // アクティブなセッションを取得（最終アクティビティの降順）
-      const activeSessions = await prisma.userSession.findMany({
+      // 期限切れまたは非アクティブなセッションをクリーンアップ
+      await prisma.userSession.updateMany({
         where: {
           userId,
-          isActive: true
+          isActive: true,
+          OR: [
+            { expiresAt: { lt: new Date() } },
+            { lastActivity: { lt: new Date(Date.now() - 30 * 60 * 1000) } }
+          ]
         },
-        orderBy: {
-          lastActivity: 'desc'
+        data: {
+          isActive: false
         }
       })
-
-      // 最新の2つ以外のセッションを無効化
-      if (activeSessions.length > 4) {
-        const sessionsToDeactivate = activeSessions.slice(4)
-        await prisma.userSession.updateMany({
-          where: {
-            id: {
-              in: sessionsToDeactivate.map(session => session.id)
-            }
-          },
-          data: {
-            isActive: false
-          }
-        })
-      }
     } catch (error) {
       console.error('Session cleanup error:', error)
     }
@@ -218,24 +222,6 @@ export class SessionManager {
         500
       )
     }
-  }
-
-  private async getStoreActiveSessions(tx: TransactionClient): Promise<number> {
-    return tx.userSession.count({
-      where: {
-        storeId: this.storeId,
-        isActive: true
-      }
-    })
-  }
-
-  private async getUserActiveSessions(tx: TransactionClient, userId: string): Promise<number> {
-    return tx.userSession.count({
-      where: {
-        userId,
-        isActive: true
-      }
-    })
   }
 
   private async deactivateSession(token: string) {
