@@ -304,3 +304,39 @@ model MonthlyServiceStat {
   updatedAt     DateTime  @updatedAt
   @@unique([serviceTypeId, year, month], name: "monthlyStatIdentifier")
 }
+
+model SystemAdminKey {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @unique @db.ObjectId
+  key          String   // 暗号化された認証キー
+  allowedIPs   String[] // 許可IPアドレスリスト
+  lastRotated  DateTime @default(now())
+  attempts     Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([key])
+}
+
+model SystemAdminSession {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  token         String   @unique
+  ipAddress     String
+  userAgent     String?
+  isActive      Boolean  @default(true)
+  lastActivity  DateTime @updatedAt
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  @@index([token, isActive])
+}
+
+model SystemAuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  action    String   // 実行されたアクション
+  resource  String?  // 対象リソース
+  ipAddress String
+  metadata  Json?    // 追加情報
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+}
