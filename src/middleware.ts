@@ -5,6 +5,62 @@ import { getToken } from 'next-auth/jwt'
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   
+  // システム管理者APIのパスをチェック
+  if (pathname.startsWith('/api/system-admin')) {
+    // ログインとMFA検証は認証なしでアクセス可能
+    if (pathname === '/api/system-admin/auth/login' || 
+        pathname === '/api/system-admin/auth/verify-mfa') {
+      return NextResponse.next();
+    }
+    
+    // それ以外のエンドポイントは認証が必要
+    const adminToken = request.headers.get('x-admin-token');
+    if (!adminToken) {
+      return NextResponse.json(
+        { error: 'システム管理者認証が必要です' },
+        { status: 401 }
+      );
+    }
+    
+    try {
+      // 内部APIを使用してトークンを検証
+      const ipAddress = request.headers.get('x-forwarded-for') || 
+                        request.headers.get('x-real-ip') || 
+                        '0.0.0.0';
+      
+      const response = await fetch(new URL('/api/system-admin/auth/validate', request.url), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: adminToken,
+          ipAddress
+        })
+      });
+      
+      const { valid } = await response.json();
+      
+      if (!valid) {
+        return NextResponse.json(
+          { error: 'システム管理者セッションが無効です' },
+          { status: 401 }
+        );
+      }
+      
+      // 検証成功、リクエストを続行
+      return NextResponse.next();
+    } catch (error) {
+      console.error('System admin session validation error in middleware:', error);
+      return NextResponse.json(
+        { error: 'セッション検証中にエラーが発生しました' },
+        { status: 500 }
+      );
+    }
+  }
+  
+  // 以下は既存のミドルウェア処理
+  
   // 認証不要のパスを定義
   const publicPaths = ['/signin', '/signup']
   if (publicPaths.includes(pathname)) {
@@ -67,5 +123,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)']
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)', '/api/:path*']
 }

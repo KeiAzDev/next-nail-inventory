@@ -1,7 +1,7 @@
 // src/lib/system-admin/auth.ts
 import { prisma } from '../prisma'
 import bcrypt from 'bcryptjs'
-import { SystemAdminError } from '../errors'
+import { SystemAdminError } from './errors'
 
 export interface AdminSessionInfo {
   ipAddress: string;
