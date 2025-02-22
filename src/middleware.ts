@@ -5,30 +5,38 @@ import { getToken } from 'next-auth/jwt'
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   
-  // システム管理者APIのパスをチェック
+  // 1. パブリックパスの定義と早期チェック
+  const publicPaths = [
+    '/signin',
+    '/signup',
+    '/_next',
+    '/api/auth',
+    '/favicon.ico',
+    '/api/system-admin/auth/login',
+    '/api/system-admin/auth/verify-mfa'
+  ]
+  
+  if (publicPaths.some(path => pathname.startsWith(path))) {
+    return NextResponse.next()
+  }
+
+  // 2. システム管理者APIのパスをチェック
   if (pathname.startsWith('/api/system-admin')) {
-    // ログインとMFA検証は認証なしでアクセス可能
-    if (pathname === '/api/system-admin/auth/login' || 
-        pathname === '/api/system-admin/auth/verify-mfa') {
-      return NextResponse.next();
-    }
-    
-    // それ以外のエンドポイントは認証が必要
-    const adminToken = request.headers.get('x-admin-token');
+    const adminToken = request.headers.get('x-admin-token')
     if (!adminToken) {
       return NextResponse.json(
         { error: 'システム管理者認証が必要です' },
         { status: 401 }
-      );
+      )
     }
-    
+
     try {
-      // 内部APIを使用してトークンを検証
       const ipAddress = request.headers.get('x-forwarded-for') || 
-                        request.headers.get('x-real-ip') || 
-                        '0.0.0.0';
+                       request.headers.get('x-real-ip') || 
+                       '0.0.0.0'
       
-      const response = await fetch(new URL('/api/system-admin/auth/validate', request.url), {
+      const validateUrl = new URL('/api/system-admin/auth/validate', request.url)
+      const validateResponse = await fetch(validateUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -37,37 +45,26 @@ export async function middleware(request: NextRequest) {
           token: adminToken,
           ipAddress
         })
-      });
+      })
       
-      const { valid } = await response.json();
-      
-      if (!valid) {
+      if (!validateResponse.ok) {
         return NextResponse.json(
           { error: 'システム管理者セッションが無効です' },
           { status: 401 }
-        );
+        )
       }
-      
-      // 検証成功、リクエストを続行
-      return NextResponse.next();
+
+      return NextResponse.next()
     } catch (error) {
-      console.error('System admin session validation error in middleware:', error);
+      console.error('System admin session validation error:', error)
       return NextResponse.json(
         { error: 'セッション検証中にエラーが発生しました' },
         { status: 500 }
-      );
+      )
     }
   }
-  
-  // 以下は既存のミドルウェア処理
-  
-  // 認証不要のパスを定義
-  const publicPaths = ['/signin', '/signup']
-  if (publicPaths.includes(pathname)) {
-    return NextResponse.next()
-  }
 
-  // staff-signupのアクセス制御
+  // 3. staff-signupのアクセス制御
   if (pathname === '/staff-signup') {
     const token = request.nextUrl.searchParams.get('token')
     if (!token) {
@@ -76,16 +73,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // セッショントークンのチェック
-  const token = await getToken({ req: request })
+  // 4. 通常のセッション検証
+  const token = await getToken({ 
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET 
+  })
   
   if (!token?.sessionToken || !token?.storeId) {
     return NextResponse.redirect(new URL('/signin', request.url))
   }
 
-  // セッション検証をAPI経由で実行
+  // 5. セッション検証をAPI経由で実行
   try {
-    const response = await fetch(new URL('/api/auth/validate', request.url), {
+    const validateResponse = await fetch(new URL('/api/auth/validate', request.url), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -96,7 +96,7 @@ export async function middleware(request: NextRequest) {
       })
     })
 
-    const { isValid } = await response.json()
+    const { isValid } = await validateResponse.json()
     
     if (!isValid) {
       return NextResponse.redirect(new URL('/signin', request.url))
@@ -106,12 +106,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/signin', request.url))
   }
 
-  // ダッシュボードへのアクセスを/stores/[id]にリダイレクト
+  // 6. ダッシュボードリダイレクト
   if (pathname === '/dashboard') {
     return NextResponse.redirect(new URL(`/stores/${token.storeId}`, request.url))
   }
 
-  // /stores/[id]へのアクセスをチェック
+  // 7. 店舗アクセス権限のチェック
   if (pathname.startsWith('/stores/')) {
     const storeId = pathname.split('/')[2]
     if (token.storeId !== storeId && token.role !== 'ADMIN') {
@@ -123,5 +123,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)', '/api/:path*']
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/api/:path*'
+  ]
 }

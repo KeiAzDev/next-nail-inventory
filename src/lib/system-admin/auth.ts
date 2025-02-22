@@ -43,12 +43,18 @@ export class SystemAdminAuth {
       console.log('Attempting to authenticate system admin with IP:', sessionInfo.ipAddress);
       
       // 1. システム管理者キーを検索
-      const adminKey = await prisma.systemAdminKey.findFirst({
-        where: { key }
-      });
+      const adminKey = await prisma.systemAdminKey.findFirst();
 
       if (!adminKey) {
+        console.warn('No admin key found');
+        throw new SystemAdminError('認証キーが無効です', 'INVALID_KEY', 401);
+      }
+
+      // キーの比較
+      const isValidKey = await bcrypt.compare(key, adminKey.key);
+      if (!isValidKey) {
         console.warn('Invalid system admin key attempt from IP:', sessionInfo.ipAddress);
+        await this.recordFailedAttempt(adminKey.id);
         throw new SystemAdminError('認証キーが無効です', 'INVALID_KEY', 401);
       }
 
@@ -104,7 +110,7 @@ export class SystemAdminAuth {
         const isValidMfa = await this.validateMfa(adminKey.userId, mfaCode);
         if (!isValidMfa) {
           await this.recordFailedAttempt(adminKey.id);
-          throw new SystemAdminError('二段階認証コードが無効です', 'INVALID_MFA', 401); // ← 修正: エラーコード追加
+          throw new SystemAdminError('二段階認証コードが無効です', 'INVALID_MFA', 401);
         }
       }
 
@@ -157,7 +163,6 @@ export class SystemAdminAuth {
       );
     }
   }
-
   /**
    * MFA検証を行い、成功時に完全なセッションを作成します
    */

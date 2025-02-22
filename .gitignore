@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# System Admin development files
+/src/lib/system-admin/tests/*.key
+/src/lib/system-admin/tests/*.log
+/src/lib/system-admin/tests/temp/
+.env.admin
+.admin.key
+
+# Test artifacts
+*.test.log
+test-results/
+coverage/
+
+# Development tools
+tsconfig-paths.json
