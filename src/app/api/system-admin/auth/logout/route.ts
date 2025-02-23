@@ -1,12 +1,12 @@
-// /src/app/api/system-admin/auth/logout/route.ts
+// src/app/api/system-admin/auth/logout/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { SystemAdminAuth } from '@/lib/system-admin/auth'
 import { SystemAdminError } from '@/lib/system-admin/errors'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { token } = body
+    // 認証トークンの取得
+    const token = request.headers.get('x-admin-token')
 
     if (!token) {
       return NextResponse.json(
@@ -15,10 +15,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // セッション無効化
+    // ログアウト処理
     const auth = new SystemAdminAuth()
     await auth.invalidateSession(token)
-
+    
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('System admin logout error:', error)

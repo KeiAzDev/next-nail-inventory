@@ -13,7 +13,8 @@ export async function middleware(request: NextRequest) {
     '/api/auth',
     '/favicon.ico',
     '/api/system-admin/auth/login',
-    '/api/system-admin/auth/verify-mfa'
+    '/api/system-admin/auth/verify-mfa',
+    '/api/system-admin/auth/validate'  // 検証APIを追加
   ]
   
   if (publicPaths.some(path => pathname.startsWith(path))) {
@@ -35,8 +36,8 @@ export async function middleware(request: NextRequest) {
                        request.headers.get('x-real-ip') || 
                        '0.0.0.0'
       
-      const validateUrl = new URL('/api/system-admin/auth/validate', request.url)
-      const validateResponse = await fetch(validateUrl, {
+      // 検証APIを使用
+      const validateResponse = await fetch(new URL('/api/system-admin/auth/validate', request.url), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,9 +49,10 @@ export async function middleware(request: NextRequest) {
       })
       
       if (!validateResponse.ok) {
+        const errorData = await validateResponse.json()
         return NextResponse.json(
-          { error: 'システム管理者セッションが無効です' },
-          { status: 401 }
+          { error: errorData.error || 'システム管理者セッションが無効です' },
+          { status: validateResponse.status }
         )
       }
 

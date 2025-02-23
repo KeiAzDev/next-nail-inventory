@@ -40,27 +40,30 @@ export class SystemAdminAuth {
    */
   async authenticate(key: string, sessionInfo: AdminSessionInfo, mfaCode?: string): Promise<any> {
     try {
-      console.log('Attempting to authenticate system admin with IP:', sessionInfo.ipAddress);
+      console.log('システム管理者認証を開始:', {
+        ipAddress: sessionInfo.ipAddress,
+        userAgent: sessionInfo.userAgent?.substring(0, 50)
+      });
       
       // 1. システム管理者キーを検索
       const adminKey = await prisma.systemAdminKey.findFirst();
 
       if (!adminKey) {
-        console.warn('No admin key found');
+        console.warn('管理者キーが見つかりません');
         throw new SystemAdminError('認証キーが無効です', 'INVALID_KEY', 401);
       }
 
       // キーの比較
       const isValidKey = await bcrypt.compare(key, adminKey.key);
       if (!isValidKey) {
-        console.warn('Invalid system admin key attempt from IP:', sessionInfo.ipAddress);
+        console.warn('無効な管理者キーでのアクセス試行:', sessionInfo.ipAddress);
         await this.recordFailedAttempt(adminKey.id);
         throw new SystemAdminError('認証キーが無効です', 'INVALID_KEY', 401);
       }
 
       // 2. リスク評価
       const riskAssessment = await this.evaluateAccessRisk(adminKey, sessionInfo);
-      console.log('Risk assessment result:', {
+      console.log('リスク評価結果:', {
         userId: adminKey.userId,
         riskScore: riskAssessment.riskScore,
         requiresAdditionalAuth: riskAssessment.requiresAdditionalAuth,
@@ -70,7 +73,7 @@ export class SystemAdminAuth {
 
       // 3. 試行回数のチェック
       if (adminKey.attempts >= this.MAX_ATTEMPTS) {
-        console.warn('Max attempts exceeded for key ID:', adminKey.id);
+        console.warn('試行回数超過:', adminKey.id);
         throw new SystemAdminError('試行回数の上限に達しました。システム管理者に連絡してください', 'MAX_ATTEMPTS_EXCEEDED', 429);
       }
 
@@ -143,14 +146,14 @@ export class SystemAdminAuth {
         riskFactors: riskAssessment.factors
       });
       
-      console.log('System admin authenticated successfully. Session created:', session.id);
+      console.log('システム管理者認証成功. セッション作成:', session.id);
       return {
         token: session.token,
         expiresAt: session.expiresAt,
         riskScore: riskAssessment.riskScore
       };
     } catch (error) {
-      console.error('System admin authentication error:', error);
+      console.error('システム管理者認証エラー:', error);
       
       if (error instanceof SystemAdminError) {
         throw error;
@@ -163,88 +166,47 @@ export class SystemAdminAuth {
       );
     }
   }
-  /**
-   * MFA検証を行い、成功時に完全なセッションを作成します
-   */
-  async verifyMfaAndComplete(tempToken: string, mfaCode: string, sessionInfo: AdminSessionInfo): Promise<any> {
-    try {
-      // 一時トークンの検証
-      const tempData = SystemAdminAuth.tempTokenStore.get(tempToken);
-      if (!tempData || tempData.expires < new Date()) {
-        throw new SystemAdminError('一時トークンが無効または期限切れです', 'INVALID_TOKEN', 401); // ← 修正: エラーコード追加
-      }
-
-      // MFA検証
-      const isValidMfa = await this.validateMfa(tempData.userId, mfaCode);
-      if (!isValidMfa) {
-        throw new SystemAdminError('二段階認証コードが無効です', 'INVALID_MFA', 401); // ← 修正: エラーコード追加
-      }
-
-      // 一時トークンを削除
-      SystemAdminAuth.tempTokenStore.delete(tempToken);
-
-      // セッション作成
-      const token = this.generateSecureToken();
-      const session = await prisma.systemAdminSession.create({
-        data: {
-          userId: tempData.userId,
-          token,
-          ipAddress: sessionInfo.ipAddress,
-          userAgent: sessionInfo.userAgent,
-          isActive: true,
-          expiresAt: new Date(Date.now() + this.SESSION_DURATION),
-          lastActivity: new Date()
-        }
-      });
-
-      // 監査ログに記録
-      await this.recordAuditEvent(tempData.userId, 'ADMIN_MFA_LOGIN', {
-        ...sessionInfo,
-        usedMfa: true
-      });
-      
-      return {
-        token: session.token,
-        expiresAt: session.expiresAt
-      };
-    } catch (error) {
-      console.error('MFA verification error:', error);
-      
-      if (error instanceof SystemAdminError) {
-        throw error;
-      }
-      
-      throw new SystemAdminError(
-        'MFA検証中にエラーが発生しました',
-        'AUTH_ERROR',
-        500
-      );
-    }
-  }
 
   /**
    * セッショントークンの検証を行います
    */
   async validateSession(token: string, ipAddress: string): Promise<boolean> {
     try {
+      console.log('セッション検証開始:', {
+        token: token.substring(0, 10) + '...',
+        ipAddress
+      });
+
       const session = await prisma.systemAdminSession.findUnique({
         where: { token }
       });
 
+      console.log('セッション検索結果:', {
+        exists: !!session,
+        isActive: session?.isActive,
+        expiresAt: session?.expiresAt,
+        sessionIp: session?.ipAddress
+      });
+
       if (!session || !session.isActive) {
+        console.warn('無効なセッション');
         return false;
       }
 
       if (session.expiresAt < new Date()) {
+        console.warn('期限切れセッション');
         await this.invalidateSession(token);
         return false;
       }
 
       // IPアドレスの確認 - セッションハイジャック防止
       if (session.ipAddress !== ipAddress) {
-        console.warn('IP address mismatch for session:', session.id, 'Expected:', session.ipAddress, 'Got:', ipAddress);
+        console.warn('IPアドレスの不一致:', {
+          sessionId: session.id,
+          expected: session.ipAddress,
+          received: ipAddress
+        });
         await this.invalidateSession(token);
-        // ← 修正: metadata参照を避ける
         await this.recordAuditEvent(session.userId, 'SUSPICIOUS_ACCESS', { 
           ipAddress,
           originalIp: session.ipAddress,
@@ -261,11 +223,13 @@ export class SystemAdminAuth {
             lastActivity: new Date()
           }
         });
+        console.log('セッションアクティビティを更新');
       }
 
+      console.log('セッション検証成功');
       return true;
     } catch (error) {
-      console.error('Session validation error:', error);
+      console.error('セッション検証エラー:', error);
       return false;
     }
   }
@@ -285,16 +249,15 @@ export class SystemAdminAuth {
           data: { isActive: false }
         });
 
-        // 監査ログに記録
         await this.recordAuditEvent(session.userId, 'ADMIN_LOGOUT', {
           ipAddress: session.ipAddress,
           userAgent: session.userAgent
         });
         
-        console.log('System admin session invalidated:', session.id);
+        console.log('システム管理者セッションを無効化:', session.id);
       }
     } catch (error) {
-      console.error('Session invalidation error:', error);
+      console.error('セッション無効化エラー:', error);
       throw new SystemAdminError(
         'セッションの無効化に失敗しました',
         'INVALID_SESSION',
@@ -360,9 +323,7 @@ export class SystemAdminAuth {
     
     // 5. 地理的位置の急激な変化（オプション）
     if (sessionInfo.geoLocation && previousSessions.length > 0) {
-      // ← 修正: メタデータアクセス方法の変更
       const lastSession = previousSessions[0];
-      // 以前の位置情報を監査ログから取得
       const lastLoginAudit = await prisma.systemAuditLog.findFirst({
         where: {
           userId: adminKey.userId,
@@ -389,7 +350,7 @@ export class SystemAdminAuth {
             }
           }
         } catch (error) {
-          console.error('Error processing location data:', error);
+          console.error('位置情報処理エラー:', error);
         }
       }
     }
@@ -406,85 +367,41 @@ export class SystemAdminAuth {
     };
   }
 
-  /**
-   * MFA検証メソッド（実際の実装ではSMS/メール/認証アプリなど）
-   */
-  private async validateMfa(userId: string, mfaCode: string): Promise<boolean> {
-    // 仮の実装: 特定のコードを許可
-    // 実際の実装ではSMS、TOTP、メールなどを使用
-    const debugMfaCode = "123456"; // 開発用（本番では使用しない）
-    
-    // TODO: 実際のMFA実装
-    // 例: ワンタイムパスワード、SMSなど
-    
-    if (process.env.NODE_ENV === 'development' && mfaCode === debugMfaCode) {
+  private isIpAllowed(ipAddress: string, allowedIPs: string[]): boolean {
+    console.log('IP許可チェック:', {
+      ipAddress,
+      allowedIPs
+    });
+
+    // 許可リストが空の場合は全て許可
+    if (!allowedIPs || allowedIPs.length === 0) {
+      console.log('許可リストが空のため、全IPを許可');
       return true;
     }
     
-    // 実際の検証ロジックをここに実装
-    // 仮実装: 6桁の数字ならOK（デモ用）
-    return /^\d{6}$/.test(mfaCode);
-  }
-
-  /**
-   * 認証失敗を記録します
-   */
-  private async recordFailedAttempt(keyId: string): Promise<void> {
-    try {
-      // 試行回数を増加
-      await prisma.systemAdminKey.update({
-        where: { id: keyId },
-        data: { attempts: { increment: 1 } }
-      });
-    } catch (error) {
-      console.error('Failed to record authentication attempt:', error);
-    }
-  }
-
-  /**
-   * 監査イベントを記録します
-   */
-  private async recordAuditEvent(userId: string, action: string, info: any): Promise<void> {
-    try {
-      await prisma.systemAuditLog.create({
-        data: {
-          userId,
-          action,
-          ipAddress: info.ipAddress,
-          metadata: {
-            ...info,
-            timestamp: new Date().toISOString()
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Failed to record audit event:', error);
-      // 監査ログのエラーはサイレント
-    }
-  }
-
-  /**
-   * IPアドレスが許可リストに含まれているかを確認します
-   */
-  private isIpAllowed(ipAddress: string, allowedIPs: string[]): boolean {
-    // 許可リストが空の場合は全て許可
-    if (!allowedIPs || allowedIPs.length === 0) return true;
-    
     // ワイルドカードチェック（全許可）
-    if (allowedIPs.includes('*')) return true;
+    if (allowedIPs.includes('*')) {
+      console.log('ワイルドカード指定により、全IPを許可');
+      return true;
+    }
     
     // 完全一致チェック
-    if (allowedIPs.includes(ipAddress)) return true;
+    if (allowedIPs.includes(ipAddress)) {
+      console.log('IP完全一致');
+      return true;
+    }
     
     // CIDR表記のサブネットチェック
     for (const allowedIP of allowedIPs) {
       if (allowedIP.includes('/')) {
         if (this.isIpInCidr(ipAddress, allowedIP)) {
+          console.log('CIDRマッチ:', allowedIP);
           return true;
         }
       }
     }
     
+    console.log('IPアドレスが許可リストに含まれていません');
     return false;
   }
 
@@ -503,7 +420,7 @@ export class SystemAdminAuth {
       
       return (ipNum & maskNum) === (subnetNum & maskNum);
     } catch (error) {
-      console.error('CIDR check error:', error);
+      console.error('CIDRチェックエラー:', error);
       return false;
     }
   }
@@ -590,5 +507,56 @@ export class SystemAdminAuth {
   
   private deg2rad(deg: number): number {
     return deg * (Math.PI/180);
+  }
+
+  /**
+   * MFA検証メソッド（実際の実装ではSMS/メール/認証アプリなど）
+   */
+  private async validateMfa(userId: string, mfaCode: string): Promise<boolean> {
+    // 開発環境では特定のコードを許可
+    const debugMfaCode = "123456";
+    
+    if (process.env.NODE_ENV === 'development' && mfaCode === debugMfaCode) {
+      return true;
+    }
+    
+    // 仮実装: 6桁の数字ならOK（デモ用）
+    return /^\d{6}$/.test(mfaCode);
+  }
+
+  /**
+   * 認証失敗を記録します
+   */
+  private async recordFailedAttempt(keyId: string): Promise<void> {
+    try {
+      await prisma.systemAdminKey.update({
+        where: { id: keyId },
+        data: { attempts: { increment: 1 } }
+      });
+    } catch (error) {
+      console.error('認証失敗の記録に失敗:', error);
+    }
+  }
+
+  /**
+   * 監査イベントを記録します
+   */
+  private async recordAuditEvent(userId: string, action: string, info: any): Promise<void> {
+    try {
+      await prisma.systemAuditLog.create({
+        data: {
+          userId,
+          action,
+          ipAddress: info.ipAddress,
+          metadata: {
+            ...info,
+            timestamp: new Date().toISOString()
+          }
+        }
+      });
+    } catch (error) {
+      console.error('監査ログの記録に失敗:', error);
+      // 監査ログのエラーはサイレント
+    }
   }
 }
