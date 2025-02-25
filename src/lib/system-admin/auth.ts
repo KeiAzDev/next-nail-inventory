@@ -2,6 +2,7 @@
 import { prisma } from '../prisma'
 import bcrypt from 'bcryptjs'
 import { SystemAdminError } from './errors'
+import { IPManager } from './ip-manager'
 
 export interface AdminSessionInfo {
   ipAddress: string;
@@ -367,42 +368,55 @@ export class SystemAdminAuth {
     };
   }
 
-  private isIpAllowed(ipAddress: string, allowedIPs: string[]): boolean {
+  private async isIpAllowed(ipAddress: string, allowedIPs: string[]): Promise<boolean> {
     console.log('IP許可チェック:', {
       ipAddress,
       allowedIPs
     });
-
-    // 許可リストが空の場合は全て許可
-    if (!allowedIPs || allowedIPs.length === 0) {
-      console.log('許可リストが空のため、全IPを許可');
-      return true;
-    }
+  
+    // IPManagerのインスタンスを取得
+    const ipManager = IPManager.getInstance();
     
-    // ワイルドカードチェック（全許可）
-    if (allowedIPs.includes('*')) {
-      console.log('ワイルドカード指定により、全IPを許可');
-      return true;
-    }
-    
-    // 完全一致チェック
-    if (allowedIPs.includes(ipAddress)) {
-      console.log('IP完全一致');
-      return true;
-    }
-    
-    // CIDR表記のサブネットチェック
-    for (const allowedIP of allowedIPs) {
-      if (allowedIP.includes('/')) {
-        if (this.isIpInCidr(ipAddress, allowedIP)) {
-          console.log('CIDRマッチ:', allowedIP);
-          return true;
+    try {
+      // IPManagerを使用して検証を行う
+      const isAllowed = await ipManager.isIpAllowed(ipAddress);
+      console.log('IPManager検証結果:', isAllowed);
+      return isAllowed;
+    } catch (error) {
+      console.error('IPManager検証エラー:', error);
+      
+      // エラーの場合はフォールバックとして既存ロジックを使用
+      // 許可リストが空の場合は全て許可
+      if (!allowedIPs || allowedIPs.length === 0) {
+        console.log('許可リストが空のため、全IPを許可');
+        return true;
+      }
+      
+      // ワイルドカードチェック（全許可）
+      if (allowedIPs.includes('*')) {
+        console.log('ワイルドカード指定により、全IPを許可');
+        return true;
+      }
+      
+      // 完全一致チェック
+      if (allowedIPs.includes(ipAddress)) {
+        console.log('IP完全一致');
+        return true;
+      }
+      
+      // CIDR表記のサブネットチェック
+      for (const allowedIP of allowedIPs) {
+        if (allowedIP.includes('/')) {
+          if (this.isIpInCidr(ipAddress, allowedIP)) {
+            console.log('CIDRマッチ:', allowedIP);
+            return true;
+          }
         }
       }
+      
+      console.log('IPアドレスが許可リストに含まれていません');
+      return false;
     }
-    
-    console.log('IPアドレスが許可リストに含まれていません');
-    return false;
   }
 
   /**
