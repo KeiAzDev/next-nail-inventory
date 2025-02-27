@@ -4,6 +4,16 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 
+// MongoDBの結果型の定義
+interface MongoCommandResult {
+  cursor?: {
+    firstBatch?: any[];
+    id?: string;
+  };
+  ok?: number;
+  [key: string]: any;
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> | { id: string } }
@@ -21,32 +31,98 @@ export async function GET(
       return new NextResponse('Forbidden', { status: 403 })
     }
 
-    const products = await prisma.product.findMany({
-      where: { storeId },
-      include: {
-        currentProductLots: true
-      },
-      orderBy: {
-        updatedAt: 'desc'
+    // 商品データを取得
+    const products = await prisma.$transaction(async (tx) => {
+      try {
+        // 標準的なPrismaクエリを試行
+        return await tx.product.findMany({
+          where: { 
+            storeId 
+          },
+          include: {
+            currentProductLots: true
+          },
+          orderBy: {
+            updatedAt: 'desc'
+          }
+        });
+      } catch (err) {
+        // POLISHタイプによるエラーが発生した場合、直接MongoDBクエリを使用
+        console.log("商品取得エラー、直接MongoDBクエリを試行:", err);
+        
+        // MongoDBの直接クエリ
+        const rawResult = await tx.$runCommandRaw({
+          find: "Product",
+          filter: { storeId },
+          sort: { updatedAt: -1 }
+        }) as MongoCommandResult;
+        
+        if (!rawResult.cursor || !rawResult.cursor.firstBatch) {
+          throw new Error("MongoDB結果の形式が予期しないものです");
+        }
+        
+        const rawProducts = rawResult.cursor.firstBatch;
+        
+        // ロット情報を取得
+        const productIds = rawProducts.map(p => p._id);
+        const lots = await tx.productLot.findMany({
+          where: {
+            productId: { in: productIds }
+          }
+        });
+        
+        // 整形
+        return rawProducts.map(product => {
+          // 古いタイプの変換
+          if (product.type === 'POLISH') {
+            product.type = 'POLISH_COLOR';
+          }
+          
+          // 新しいフィールドのデフォルト設定
+          product.isLiquid = product.isLiquid ?? true;
+          product.useColorPicker = product.useColorPicker ?? true;
+          
+          // ロット情報を追加
+          product.currentProductLots = lots.filter(lot => lot.productId === product._id);
+          return product;
+        });
       }
-    })
+    });
 
     // レスポンスデータの整形
-    const formattedProducts = products.map(product => ({
-      ...product,
-      lots: product.currentProductLots.map(lot => ({
-        ...lot,
-        startedAt: lot.startedAt?.toISOString() || null,
-        createdAt: lot.createdAt.toISOString(),
-        updatedAt: lot.updatedAt.toISOString()
-      })),
-      createdAt: product.createdAt.toISOString(),
-      updatedAt: product.updatedAt.toISOString(),
-      lastUsed: product.lastUsed?.toISOString() || null,
-      currentProductLots: undefined  // この属性は削除
-    }))
+    const formattedProducts = products.map(product => {
+      // 古いPOLISHタイプの場合、新しいPOLISH_COLORに変換
+      let updatedType = product.type;
+      if (updatedType === 'POLISH') {
+        updatedType = 'POLISH_COLOR';
+      }
+      
+      // 新しいフィールドのデフォルト設定
+      const isLiquid = 'isLiquid' in product ? product.isLiquid : 
+        ['POLISH_COLOR', 'POLISH', 'GEL_COLOR', 'GEL_BASE', 'GEL_TOP', 'GEL_REMOVER'].includes(updatedType);
+      
+      const useColorPicker = 'useColorPicker' in product ? product.useColorPicker :
+        ['POLISH_COLOR', 'POLISH', 'GEL_COLOR'].includes(updatedType);
+      
+      return {
+        ...product,
+        type: updatedType,
+        isLiquid,
+        useColorPicker,
+        lots: (product.currentProductLots || []).map((lot: any) => ({
+          ...lot,
+          startedAt: lot.startedAt?.toISOString() || null,
+          createdAt: lot.createdAt instanceof Date ? lot.createdAt.toISOString() : (typeof lot.createdAt === 'string' ? lot.createdAt : new Date().toISOString()),
+          updatedAt: lot.updatedAt instanceof Date ? lot.updatedAt.toISOString() : (typeof lot.updatedAt === 'string' ? lot.updatedAt : new Date().toISOString())
+        })),
+        createdAt: product.createdAt instanceof Date ? product.createdAt.toISOString() : (typeof product.createdAt === 'string' ? product.createdAt : new Date().toISOString()),
+        updatedAt: product.updatedAt instanceof Date ? product.updatedAt.toISOString() : (typeof product.updatedAt === 'string' ? product.updatedAt : new Date().toISOString()),
+        lastUsed: product.lastUsed instanceof Date ? product.lastUsed.toISOString() : (product.lastUsed || null),
+        currentProductLots: undefined  // この属性は削除
+      }
+    });
 
-    return NextResponse.json(formattedProducts)
+    return NextResponse.json(formattedProducts);
   } catch (error) {
     console.error('Products fetch error:', error)
     return NextResponse.json(
@@ -78,6 +154,16 @@ export async function POST(
     }
 
     const body = await request.json()
+    
+    // 古いPOLISHタイプを新しいPOLISH_COLORに変換
+    let productType = body.type;
+    if (productType === 'POLISH') {
+      productType = 'POLISH_COLOR';
+    }
+    
+    // isLiquidとuseColorPickerのデフォルト値を設定
+    const isLiquid = body.isLiquid ?? ['POLISH_COLOR', 'GEL_COLOR', 'GEL_BASE', 'GEL_TOP', 'GEL_REMOVER'].includes(productType);
+    const useColorPicker = body.useColorPicker ?? ['POLISH_COLOR', 'GEL_COLOR'].includes(productType);
 
     // トランザクションで商品とロットを作成
     const result = await prisma.$transaction(async (tx) => {
@@ -88,7 +174,7 @@ export async function POST(
           productName: body.productName,
           colorCode: body.colorCode,
           colorName: body.colorName,
-          type: body.type,
+          type: productType,
           price: body.price,
           capacity: body.capacity,
           capacityUnit: body.capacityUnit,
@@ -99,6 +185,9 @@ export async function POST(
           totalQuantity: body.quantity,
           lotQuantity: body.quantity - 1,
           inUseQuantity: 1,
+          // 新しいフィールド
+          isLiquid,
+          useColorPicker,
           // その他の初期値
           usageCount: 0,
           estimatedDaysLeft: null,
@@ -116,7 +205,7 @@ export async function POST(
           metadata: {
             productName: body.productName,
             brand: body.brand,
-            type: body.type,
+            type: productType,
             colorName: body.colorName,
             capacity: body.capacity,
             capacityUnit: body.capacityUnit,
@@ -197,6 +286,16 @@ export async function PATCH(
     }
 
     const body = await request.json()
+    
+    // 古いPOLISHタイプを新しいPOLISH_COLORに変換
+    let productType = body.type;
+    if (productType === 'POLISH') {
+      productType = 'POLISH_COLOR';
+    }
+    
+    // isLiquidとuseColorPickerのデフォルト値を設定
+    const isLiquid = body.isLiquid ?? ['POLISH_COLOR', 'GEL_COLOR', 'GEL_BASE', 'GEL_TOP', 'GEL_REMOVER'].includes(productType);
+    const useColorPicker = body.useColorPicker ?? ['POLISH_COLOR', 'GEL_COLOR'].includes(productType);
 
     const result = await prisma.$transaction(async (tx) => {
       // 更新前の商品情報を取得
@@ -216,13 +315,15 @@ export async function PATCH(
           productName: body.productName,
           colorCode: body.colorCode,
           colorName: body.colorName,
-          type: body.type,
+          type: productType,
           price: body.price,
           capacity: body.capacity,
           capacityUnit: body.capacityUnit,
           averageUsePerService: body.averageUsePerService,
           minStockAlert: body.minStockAlert,
           recommendedAlertPercentage: body.recommendedAlertPercentage,
+          isLiquid,
+          useColorPicker,
         }
       })
 

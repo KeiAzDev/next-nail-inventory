@@ -134,6 +134,15 @@ function UsageAmountInput({
   );
 }
 
+// 型安全なタイプチェック関数
+function isGelType(type: string): boolean {
+  return ["GEL_BASE", "GEL_TOP", "GEL_COLOR"].includes(type);
+}
+
+function isPolishType(type: string): boolean {
+  return type === "POLISH_COLOR" || type === "POLISH";
+}
+
 export default function InventoryUsageRecordModal({
   storeId,
   open,
@@ -146,33 +155,43 @@ export default function InventoryUsageRecordModal({
   const [selectedType, setSelectedType] = useState<ProductType | "ALL">("ALL");
 
   // データ取得
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ["products", storeId],
     queryFn: () => fetchStoreProducts(storeId),
     enabled: open,
   });
 
-  const { data: serviceTypes = [] } = useQuery({
+  const { data: serviceTypes = [], isLoading: serviceTypesLoading } = useQuery({
     queryKey: ["serviceTypes", storeId],
-    queryFn: () => fetchServiceTypes(storeId),
+    queryFn: async () => {
+      console.log("Fetching service types for store:", storeId);
+      const result = await fetchServiceTypes(storeId);
+      console.log("Fetched service types:", result);
+      return result;
+    },
     enabled: open,
   });
 
   const { data: climateData } = useQuery({
     queryKey: ["climate"],
-    queryFn: async (context) => {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject);
-      });
-      
-      return fetchClimateData(
-        position.coords.latitude,
-        position.coords.longitude
-      );
+    queryFn: async () => {
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject);
+        });
+        
+        return fetchClimateData(
+          position.coords.latitude,
+          position.coords.longitude
+        );
+      } catch (error) {
+        console.error("Failed to get location:", error);
+        return null;
+      }
     },
     enabled: open,
     retry: false
-});
+  });
 
   // 商品のフィルタリング
   const filteredProducts = products.filter((product) => {
@@ -188,56 +207,111 @@ export default function InventoryUsageRecordModal({
 
   // 選択商品に応じたサービスタイプの取得
   const getFilteredServiceTypes = (product: Product) => {
-    if (["GEL_BASE", "GEL_TOP", "GEL_COLOR"].includes(product.type)) {
-      return serviceTypes.filter((st) => st.name === "ワンカラー（ジェル）");
-    }
-
-    if (product.type === "POLISH") {
-      return serviceTypes.filter(
-        (st) => st.name === "ワンカラー（ポリッシュ）"
+    console.log("Filtering service types for product:", product.productName, "type:", product.type);
+    
+    // 安全に文字列として扱う
+    const productType = String(product.type);
+    
+    // ジェル系商品の場合
+    if (isGelType(productType)) {
+      const filteredGelTypes = serviceTypes.filter((st) => 
+        st.name.includes("ジェル") || 
+        isGelType(String(st.productType))
       );
+      console.log("Filtered gel service types:", filteredGelTypes.map(st => st.name));
+      return filteredGelTypes.length > 0 ? filteredGelTypes : serviceTypes;
     }
 
+    // ポリッシュ系商品の場合
+    if (isPolishType(productType)) {
+      const filteredPolishTypes = serviceTypes.filter((st) => 
+        st.name.includes("ポリッシュ") || 
+        isPolishType(String(st.productType))
+      );
+      console.log("Filtered polish service types:", filteredPolishTypes.map(st => st.name));
+      return filteredPolishTypes.length > 0 ? filteredPolishTypes : serviceTypes;
+    }
+
+    console.log("No specific filtering applied, returning all service types");
     return serviceTypes;
   };
 
   // 商品選択時の処理
   const handleProductSelect = (product: Product) => {
+    console.log("Selected product:", product.productName, product.type);
+    
     const filteredTypes = getFilteredServiceTypes(product);
-    const defaultServiceType = filteredTypes[0];
+    let defaultServiceType = filteredTypes[0];
+    
+    // デフォルト施術タイプが見つからない場合はすべてのサービスタイプから選択
+    if (!defaultServiceType && serviceTypes.length > 0) {
+      console.log("No matching service type found, using first available service type");
+      defaultServiceType = serviceTypes[0];
+    }
 
     if (defaultServiceType) {
-      const calculations = calculateUsageAmounts(
-        defaultServiceType,
-        formData.nailLength
-      );
+      console.log("Using service type:", defaultServiceType.name);
+      try {
+        const calculations = calculateUsageAmounts(
+          defaultServiceType,
+          formData.nailLength
+        );
 
-      setFormData((prev) => ({
-        ...prev,
-        serviceTypeId: defaultServiceType.id,
-        mainProduct: {
-          productId: product.id,
-          amount: calculations.mainAmount,
-          defaultAmount: calculations.defaultAmount,
-          isCustom: false,
-        },
-        relatedProducts: calculations.relatedAmounts.map((ra) => ({
-          productId: ra.productId,
-          amount: ra.amount,
-          defaultAmount: ra.defaultAmount,
-          isCustom: false,
-        })),
-      }));
+        setFormData((prevState) => ({
+          ...prevState,
+          serviceTypeId: defaultServiceType.id,
+          mainProduct: {
+            productId: product.id,
+            amount: calculations.mainAmount,
+            defaultAmount: calculations.defaultAmount,
+            isCustom: false,
+          },
+          relatedProducts: calculations.relatedAmounts.map((ra) => ({
+            productId: ra.productId,
+            amount: ra.amount,
+            defaultAmount: ra.defaultAmount,
+            isCustom: false,
+          })),
+        }));
+      } catch (error) {
+        console.error("Error calculating usage amounts:", error);
+        toast({
+          title: "計算エラー",
+          description: "使用量の計算に失敗しました。管理者に連絡してください。",
+          variant: "destructive"
+        });
+        
+        // エラー発生時も基本的な設定はする
+        setFormData((prevState) => ({
+          ...prevState,
+          serviceTypeId: defaultServiceType.id,
+          mainProduct: {
+            productId: product.id,
+            amount: 1.0, // デフォルト値
+            isCustom: false,
+          },
+          relatedProducts: [],
+        }));
+      }
     } else {
-      setFormData((prev) => ({
-        ...prev,
+      console.warn("No service type found for product:", product.productName);
+      
+      // サービスタイプがない場合は商品のみ設定
+      setFormData((prevState) => ({
+        ...prevState,
         mainProduct: {
           productId: product.id,
-          amount: 0,
+          amount: 1.0, // デフォルト値
           isCustom: false,
         },
         relatedProducts: [],
       }));
+      
+      toast({
+        title: "注意",
+        description: "この商品に対応する施術タイプが見つかりません。手動で使用量を設定してください。",
+        variant: "destructive" // "warning"の代わりに"destructive"を使用
+      });
     }
   };
 
@@ -248,31 +322,42 @@ export default function InventoryUsageRecordModal({
     );
     if (!serviceType) return;
 
-    const calculations = calculateUsageAmounts(serviceType, nailLength);
+    try {
+      const calculations = calculateUsageAmounts(serviceType, nailLength);
 
-    setFormData((prev) => ({
-      ...prev,
-      nailLength,
-      mainProduct: {
-        ...prev.mainProduct,
-        amount: prev.mainProduct.isCustom
-          ? prev.mainProduct.amount
-          : calculations.mainAmount,
-        defaultAmount: calculations.defaultAmount,
-      },
-      relatedProducts: calculations.relatedAmounts.map((ra) => ({
-        productId: ra.productId,
-        amount: prev.relatedProducts.find((rp) => rp.productId === ra.productId)
-          ?.isCustom
-          ? prev.relatedProducts.find((rp) => rp.productId === ra.productId)
-              ?.amount ?? ra.amount
-          : ra.amount,
-        defaultAmount: ra.defaultAmount,
-        isCustom:
-          prev.relatedProducts.find((rp) => rp.productId === ra.productId)
-            ?.isCustom ?? false,
-      })),
-    }));
+      setFormData((prevState) => ({
+        ...prevState,
+        nailLength,
+        mainProduct: {
+          ...prevState.mainProduct,
+          amount: prevState.mainProduct.isCustom
+            ? prevState.mainProduct.amount
+            : calculations.mainAmount,
+          defaultAmount: calculations.defaultAmount,
+        },
+        relatedProducts: calculations.relatedAmounts.map((ra) => {
+          const existingRelated = prevState.relatedProducts.find(
+            (rp) => rp.productId === ra.productId
+          );
+          
+          return {
+            productId: ra.productId,
+            amount: existingRelated?.isCustom
+              ? existingRelated.amount ?? ra.amount
+              : ra.amount,
+            defaultAmount: ra.defaultAmount,
+            isCustom: existingRelated?.isCustom ?? false,
+          };
+        }),
+      }));
+    } catch (error) {
+      console.error("Error recalculating usage amounts:", error);
+      toast({
+        title: "計算エラー",
+        description: "使用量の再計算に失敗しました。",
+        variant: "destructive"
+      });
+    }
   };
 
   // 使用記録の登録
@@ -319,6 +404,12 @@ export default function InventoryUsageRecordModal({
           </DialogDescription>
         </DialogHeader>
 
+        {(productsLoading || serviceTypesLoading) && (
+          <div className="py-4 text-center text-gray-500">
+            データを読み込み中...
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* 商品タイプフィルター */}
           <div className="space-y-2">
@@ -334,7 +425,7 @@ export default function InventoryUsageRecordModal({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">全て</SelectItem>
-                <SelectItem value="POLISH">ポリッシュ</SelectItem>
+                <SelectItem value="POLISH_COLOR">ポリッシュカラー</SelectItem>
                 <SelectItem value="GEL_COLOR">ジェルカラー</SelectItem>
                 <SelectItem value="GEL_BASE">ベースジェル</SelectItem>
                 <SelectItem value="GEL_TOP">トップジェル</SelectItem>
@@ -368,6 +459,7 @@ export default function InventoryUsageRecordModal({
               >
                 <div className="font-medium">{product.productName}</div>
                 <div className="text-sm text-gray-600">{product.brand}</div>
+                <div className="text-xs text-gray-400">{String(product.type)}</div>
               </div>
             ))}
             {filteredProducts.length === 0 && (
@@ -431,10 +523,10 @@ export default function InventoryUsageRecordModal({
                         )?.capacityUnit
                       }
                       onAmountChange={(amount, isCustom) => {
-                        setFormData((prev) => ({
-                          ...prev,
+                        setFormData((prevState) => ({
+                          ...prevState,
                           mainProduct: {
-                            ...prev.mainProduct,
+                            ...prevState.mainProduct,
                             amount,
                             isCustom,
                           },
@@ -465,9 +557,9 @@ export default function InventoryUsageRecordModal({
                           maxAmount={product.capacity ?? undefined}
                           unit={product.capacityUnit ?? undefined} // null の場合は undefined に変換
                           onAmountChange={(amount, isCustom) => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              relatedProducts: prev.relatedProducts.map(
+                            setFormData((prevState) => ({
+                              ...prevState,
+                              relatedProducts: prevState.relatedProducts.map(
                                 (item, i) =>
                                   i === index
                                     ? { ...item, amount, isCustom }
@@ -488,8 +580,8 @@ export default function InventoryUsageRecordModal({
                       <Input
                         value={formData.adjustmentReason ?? ""}
                         onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
+                          setFormData((prevState) => ({
+                            ...prevState,
                             adjustmentReason: e.target.value,
                           }))
                         }
@@ -532,7 +624,7 @@ export default function InventoryUsageRecordModal({
                   type="date"
                   value={formData.date}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, date: e.target.value }))
+                    setFormData((prevState) => ({ ...prevState, date: e.target.value }))
                   }
                   required
                   className="bg-white"
@@ -545,7 +637,7 @@ export default function InventoryUsageRecordModal({
                 <Input
                   value={formData.note}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, note: e.target.value }))
+                    setFormData((prevState) => ({ ...prevState, note: e.target.value }))
                   }
                   className="bg-white"
                 />

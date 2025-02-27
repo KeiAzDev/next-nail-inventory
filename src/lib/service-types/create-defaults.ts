@@ -20,7 +20,21 @@ export async function createDefaultServiceTypes(
 ) {
   try {
     const serviceTypes = []
+    console.log(`Creating default service types for store: ${storeId}`);
 
+    // 関連商品のために必要なデフォルト商品タイプの一覧を取得
+    const requiredProductTypes = new Set<string>();
+    DEFAULT_SERVICE_TYPES.forEach(serviceType => {
+      if (serviceType.requiredProducts) {
+        serviceType.requiredProducts.forEach(product => {
+          requiredProductTypes.add(String(product.type));
+        });
+      }
+    });
+
+    console.log('Required product types:', Array.from(requiredProductTypes));
+
+    // サービスタイプの作成（関連商品なし）
     for (const defaultType of DEFAULT_SERVICE_TYPES) {
       console.log('Creating service type:', {
         name: defaultType.name,
@@ -30,46 +44,37 @@ export async function createDefaultServiceTypes(
         productType: defaultType.productType
       });
 
-      // 施術タイプの作成
-      const serviceType = await tx.serviceType.create({
-        data: {
-          name: defaultType.name,
-          defaultUsageAmount: defaultType.defaultUsageAmount,
-          productType: defaultType.productType,
-          // ジェル関連のフラグを設定
-          isGelService: defaultType.isGelService,
-          requiresBase: defaultType.requiresBase,
-          requiresTop: defaultType.requiresTop,
-          // 長さごとの設定
-          shortLengthRate: defaultType.shortLengthRate,
-          mediumLengthRate: defaultType.mediumLengthRate,
-          longLengthRate: defaultType.longLengthRate,
-          allowCustomAmount: defaultType.allowCustomAmount,
-          // 店舗との関連付け
-          store: { connect: { id: storeId } }
-        }
-      })
-
-      // 関連商品の設定が存在する場合
-      if (defaultType.requiredProducts) {
-        for (const requiredProduct of defaultType.requiredProducts) {
-          await tx.serviceTypeProduct.create({
-            data: {
-              serviceType: { connect: { id: serviceType.id } },
-              product: { connect: { id: '' } }, // この部分は後で商品が作成されてから設定
-              usageAmount: requiredProduct.defaultAmount,
-              isRequired: requiredProduct.isRequired,
-              productRole: requiredProduct.productRole,
-              order: requiredProduct.order
-            }
-          })
-        }
+      try {
+        // 施術タイプの作成（関連商品なし）
+        const serviceType = await tx.serviceType.create({
+          data: {
+            name: defaultType.name,
+            defaultUsageAmount: defaultType.defaultUsageAmount,
+            productType: defaultType.productType,
+            // ジェル関連のフラグを設定
+            isGelService: defaultType.isGelService,
+            requiresBase: defaultType.requiresBase,
+            requiresTop: defaultType.requiresTop,
+            // 長さごとの設定
+            shortLengthRate: defaultType.shortLengthRate,
+            mediumLengthRate: defaultType.mediumLengthRate,
+            longLengthRate: defaultType.longLengthRate,
+            allowCustomAmount: defaultType.allowCustomAmount,
+            // 店舗との関連付け
+            store: { connect: { id: storeId } }
+          }
+        });
+        
+        console.log(`Created service type: ${serviceType.name}, ID: ${serviceType.id}`);
+        serviceTypes.push(serviceType);
+      } catch (error) {
+        // 個別のサービスタイプ作成エラーをログに残すが、全体の処理は継続
+        console.error(`Error creating service type: ${defaultType.name}`, error);
       }
-
-      serviceTypes.push(serviceType)
     }
 
-    return serviceTypes
+    console.log(`Successfully created ${serviceTypes.length} default service types`);
+    return serviceTypes;
   } catch (error) {
     console.error('Service type creation error:', error)
     if (error instanceof Prisma.PrismaClientKnownRequestError) {

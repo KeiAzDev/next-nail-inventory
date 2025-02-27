@@ -24,11 +24,11 @@ interface DefaultServiceType {
 }
 
 export const DEFAULT_SERVICE_TYPES: DefaultServiceType[] = [
-  // ポリッシュサービス
+  // ポリッシュカラーサービス（POLISH→POLISH_COLORに更新）
   {
-    name: "ポリッシュ",
+    name: "ワンカラー（ポリッシュ）",
     defaultUsageAmount: 0.5,
-    productType: "POLISH",
+    productType: "POLISH_COLOR" as Type,
     shortLengthRate: 80,
     mediumLengthRate: 100,
     longLengthRate: 130,
@@ -37,11 +37,55 @@ export const DEFAULT_SERVICE_TYPES: DefaultServiceType[] = [
     requiresBase: false,
     requiresTop: false
   },
+  // ポリッシュベースサービス（新規追加）
+  {
+    name: "ポリッシュベース",
+    defaultUsageAmount: 0.6,
+    productType: "POLISH_BASE" as Type,
+    shortLengthRate: 80,
+    mediumLengthRate: 100,
+    longLengthRate: 130,
+    allowCustomAmount: true,
+    isGelService: false,
+    requiresBase: false,
+    requiresTop: true,
+    requiredProducts: [
+      {
+        type: "POLISH_TOP" as Type,
+        defaultAmount: 0.6,
+        isRequired: true,
+        productRole: "TOP",
+        order: 2
+      }
+    ]
+  },
+  // ポリッシュトップサービス（新規追加）
+  {
+    name: "ポリッシュトップ",
+    defaultUsageAmount: 0.6,
+    productType: "POLISH_TOP" as Type,
+    shortLengthRate: 80,
+    mediumLengthRate: 100,
+    longLengthRate: 130,
+    allowCustomAmount: true,
+    isGelService: false,
+    requiresBase: true,
+    requiresTop: false,
+    requiredProducts: [
+      {
+        type: "POLISH_BASE" as Type,
+        defaultAmount: 0.6,
+        isRequired: true,
+        productRole: "BASE",
+        order: 1
+      }
+    ]
+  },
   // ジェルカラーサービス
   {
-    name: "ジェル",
+    name: "ワンカラー（ジェル）",
     defaultUsageAmount: 1.0,
-    productType: "GEL_COLOR",
+    productType: "GEL_COLOR" as Type,
     shortLengthRate: 80,
     mediumLengthRate: 100,
     longLengthRate: 130,
@@ -51,14 +95,14 @@ export const DEFAULT_SERVICE_TYPES: DefaultServiceType[] = [
     requiresTop: true,
     requiredProducts: [
       {
-        type: "GEL_BASE",
+        type: "GEL_BASE" as Type,
         defaultAmount: 1.5,
         isRequired: true,
         productRole: "BASE",
         order: 1
       },
       {
-        type: "GEL_TOP",
+        type: "GEL_TOP" as Type,
         defaultAmount: 1.5,
         isRequired: true,
         productRole: "TOP",
@@ -70,7 +114,7 @@ export const DEFAULT_SERVICE_TYPES: DefaultServiceType[] = [
   {
     name: "ベースジェル",
     defaultUsageAmount: 1.5,
-    productType: "GEL_BASE",
+    productType: "GEL_BASE" as Type,
     shortLengthRate: 80,
     mediumLengthRate: 100,
     longLengthRate: 130,
@@ -80,7 +124,7 @@ export const DEFAULT_SERVICE_TYPES: DefaultServiceType[] = [
     requiresTop: true,
     requiredProducts: [
       {
-        type: "GEL_TOP",
+        type: "GEL_TOP" as Type,
         defaultAmount: 1.5,
         isRequired: true,
         productRole: "TOP",
@@ -92,7 +136,7 @@ export const DEFAULT_SERVICE_TYPES: DefaultServiceType[] = [
   {
     name: "トップジェル",
     defaultUsageAmount: 1.5,
-    productType: "GEL_TOP",
+    productType: "GEL_TOP" as Type,
     shortLengthRate: 80,
     mediumLengthRate: 100,
     longLengthRate: 130,
@@ -102,13 +146,26 @@ export const DEFAULT_SERVICE_TYPES: DefaultServiceType[] = [
     requiresTop: false,
     requiredProducts: [
       {
-        type: "GEL_BASE",
+        type: "GEL_BASE" as Type,
         defaultAmount: 1.5,
         isRequired: true,
         productRole: "BASE",
         order: 1
       }
     ]
+  },
+  // ジェルリムーバーサービス（新規追加）
+  {
+    name: "ジェルリムーバー",
+    defaultUsageAmount: 2.0,
+    productType: "GEL_REMOVER" as Type,
+    shortLengthRate: 80,
+    mediumLengthRate: 100,
+    longLengthRate: 130,
+    allowCustomAmount: true,
+    isGelService: true,
+    requiresBase: false,
+    requiresTop: false
   }
 ]
 
@@ -120,10 +177,13 @@ export const DEFAULT_SERVICE_TYPE_CONFIG = {
   },
   
   DEFAULT_AMOUNTS: {
-    POLISH: 0.5,
+    POLISH_COLOR: 0.5, // POLISHからPOLISH_COLORに更新
+    POLISH_BASE: 0.6,  // 新規追加
+    POLISH_TOP: 0.6,   // 新規追加
     GEL_COLOR: 1.0,
     GEL_BASE: 1.5,
-    GEL_TOP: 1.5
+    GEL_TOP: 1.5,
+    GEL_REMOVER: 2.0   // 新規追加
   }
 } as const
 
@@ -133,7 +193,9 @@ export class DefaultServiceTypeUtils {
   }
 
   static findByProductType(type: Type): DefaultServiceType | undefined {
-    return DEFAULT_SERVICE_TYPES.find(st => st.productType === type)
+    // 文字列として比較するために変換
+    const typeString = String(type);
+    return DEFAULT_SERVICE_TYPES.find(st => String(st.productType) === typeString);
   }
 
   static getRequiredProductTypes(name: string): Type[] {
@@ -146,6 +208,14 @@ export class DefaultServiceTypeUtils {
   }
 
   static isGelService(type: Type): boolean {
-    return ["GEL_COLOR", "GEL_BASE", "GEL_TOP"].includes(type)
+    // 安全に文字列として比較
+    const typeString = String(type);
+    return ["GEL_COLOR", "GEL_BASE", "GEL_TOP", "GEL_REMOVER"].includes(typeString);
+  }
+  
+  static isPolishService(type: Type): boolean {
+    // 安全に文字列として比較
+    const typeString = String(type);
+    return ["POLISH_COLOR", "POLISH_BASE", "POLISH_TOP"].includes(typeString);
   }
 }

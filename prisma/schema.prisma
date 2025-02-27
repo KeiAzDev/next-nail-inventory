@@ -15,10 +15,20 @@ datasource db {
 }
 
 enum Type {
-  POLISH
+  POLISH_COLOR
+  POLISH_BASE
+  POLISH_TOP
+
   GEL_COLOR
   GEL_BASE
   GEL_TOP
+  GEL_REMOVER
+
+  NAIL_CARE
+  TOOL
+  CONSUMABLE
+  SANITIZATION
+  STORE_SUPPLY
 }
 
 enum NailLength {
@@ -121,6 +131,9 @@ model Product {
   opacity     Float     @default(1)  // 透明度（0-1）
   type        Type
   price       Float
+
+  isLiquid    Boolean   @default(true)  // 液体商品かどうか（残量ゲージ表示に影響）
+  useColorPicker Boolean @default(true) // カラーピッカーを使用するかどうか
   
   // 容量関連フィールド（既存）
   capacity         Float?    

@@ -27,7 +27,94 @@ export type Store = {
   updatedAt: string
 }
 
-export type ProductType = 'POLISH' | 'GEL_COLOR' | 'GEL_BASE' | 'GEL_TOP'
+// 更新されたProductType型定義
+export type ProductType = 
+  | 'POLISH_COLOR'
+  | 'POLISH_BASE'
+  | 'POLISH_TOP'
+  | 'GEL_COLOR'
+  | 'GEL_BASE'
+  | 'GEL_TOP'
+  | 'GEL_REMOVER'
+  | 'NAIL_CARE'
+  | 'TOOL'
+  | 'CONSUMABLE'
+  | 'SANITIZATION'
+  | 'STORE_SUPPLY'
+
+// 製品カテゴリのグループ分け用ヘルパー関数
+export const isColorProduct = (type: ProductType): boolean => {
+  return [
+    'POLISH_COLOR',
+    'GEL_COLOR'
+  ].includes(type);
+};
+
+export const isBaseProduct = (type: ProductType): boolean => {
+  return [
+    'POLISH_BASE',
+    'GEL_BASE'
+  ].includes(type);
+};
+
+export const isTopProduct = (type: ProductType): boolean => {
+  return [
+    'POLISH_TOP',
+    'GEL_TOP'
+  ].includes(type);
+};
+
+export const isLiquidProduct = (type: ProductType): boolean => {
+  return [
+    'POLISH_COLOR',
+    'POLISH_BASE',
+    'POLISH_TOP',
+    'GEL_COLOR',
+    'GEL_BASE',
+    'GEL_TOP',
+    'GEL_REMOVER'
+  ].includes(type);
+};
+
+export const isNailPolishProduct = (type: ProductType): boolean => {
+  return [
+    'POLISH_COLOR',
+    'POLISH_BASE',
+    'POLISH_TOP'
+  ].includes(type);
+};
+
+export const isGelProduct = (type: ProductType): boolean => {
+  return [
+    'GEL_COLOR',
+    'GEL_BASE',
+    'GEL_TOP',
+    'GEL_REMOVER'
+  ].includes(type);
+};
+
+export const needsColorPicker = (type: ProductType): boolean => {
+  return [
+    'POLISH_COLOR',
+    'GEL_COLOR'
+  ].includes(type);
+};
+
+// 製品タイプの日本語表示用
+export const productTypeLabels: Record<ProductType, string> = {
+  'POLISH_COLOR': 'ポリッシュカラー',
+  'POLISH_BASE': 'ポリッシュベース',
+  'POLISH_TOP': 'ポリッシュトップ',
+  'GEL_COLOR': 'ジェルカラー',
+  'GEL_BASE': 'ジェルベース',
+  'GEL_TOP': 'ジェルトップ',
+  'GEL_REMOVER': 'ジェルリムーバー',
+  'NAIL_CARE': 'ネイルケア用品',
+  'TOOL': 'ツール類',
+  'CONSUMABLE': '消耗品',
+  'SANITIZATION': '衛生用品',
+  'STORE_SUPPLY': '店舗備品'
+};
 
 // @/types/api.ts の Product 型を修正
 export type Product = {
@@ -38,7 +125,9 @@ export type Product = {
   colorName: string
   type: ProductType
   price: number
-  // quantity を削除（totalQuantity に置き換え）
+  // 新しいフィールド
+  isLiquid: boolean
+  useColorPicker: boolean
   // 容量関連フィールド
   capacity: number | null
   capacityUnit: string | null
@@ -53,7 +142,7 @@ export type Product = {
   storeId: string
   createdAt: string
   updatedAt: string
-  // 新規フィールド
+  // ロット管理関連フィールド
   totalQuantity: number
   inUseQuantity: number
   lotQuantity: number
@@ -71,6 +160,7 @@ export interface ProductLot {
   updatedAt: string
 }
 
+// 残りの型定義（変更なし）はそのまま...
 export type StaffMember = {
   id: string
   email: string

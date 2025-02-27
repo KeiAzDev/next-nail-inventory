@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useProductStatistics } from "@/hooks/queries/use-product-statistics";
+import type { ProductType } from "@/types/api";
 
 interface ProductUsageStatisticsProps {
   storeId: string;
@@ -16,6 +17,24 @@ interface StatsCardProps {
   bgColor: string;
   textColor: string;
 }
+
+// 商品タイプの日本語表示名マッピング
+const productTypeLabels: Record<string, string> = {
+  'POLISH_COLOR': 'ポリッシュカラー',
+  'POLISH_BASE': 'ポリッシュベース',
+  'POLISH_TOP': 'ポリッシュトップ',
+  'GEL_COLOR': 'ジェルカラー',
+  'GEL_BASE': 'ジェルベース',
+  'GEL_TOP': 'ジェルトップ',
+  'GEL_REMOVER': 'ジェルリムーバー',
+  'NAIL_CARE': 'ネイルケア用品',
+  'TOOL': 'ツール類',
+  'CONSUMABLE': '消耗品',
+  'SANITIZATION': '衛生用品',
+  'STORE_SUPPLY': '店舗備品',
+  // 古いタイプにも対応（念のため）
+  'POLISH': 'ポリッシュカラー'
+};
 
 function StatsCard({ title, value, bgColor, textColor }: StatsCardProps) {
   return (
@@ -92,7 +111,7 @@ export default function ProductUsageStatistics({
                 {stat.brand || "ブランド未設定"})
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                {stat.colorName} - {stat.type}
+                {stat.colorName} - {productTypeLabels[stat.type] || stat.type}
               </p>
             </div>
             <div className="text-sm">

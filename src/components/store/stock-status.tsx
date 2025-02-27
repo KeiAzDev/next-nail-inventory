@@ -5,6 +5,7 @@ import { Progress } from '@/components/ui/progress'
 import { AlertTriangle, Package, TrendingUp } from 'lucide-react'
 import type { Product } from '@/types/api'
 import { useServiceTypePrediction } from '@/hooks/queries/use-predictions'
+import { isLiquidProduct } from '@/types/api'
 
 interface StockStatusProps {
   product: Product
@@ -21,52 +22,93 @@ export default function StockStatus({
 }: StockStatusProps) {
   const [remainingPercentage, setRemainingPercentage] = useState<number>(0)
   const inUseLot = product.lots?.find(lot => lot.isInUse)
+  const isLiquid = isLiquidProduct(product.type)
   
   // 製品に関連するサービスタイプの予測を取得
   const serviceTypeId = product.serviceTypeProducts?.[0]?.serviceTypeId
   const { prediction } = useServiceTypePrediction(storeId, serviceTypeId ?? '')
   
   useEffect(() => {
-    if (inUseLot && product.capacity) {
+    if (isLiquid && inUseLot && product.capacity) {
       const percentage = Math.round((inUseLot.currentAmount ?? 0) / product.capacity * 100)
       setRemainingPercentage(Math.max(0, Math.min(100, percentage)))
     }
-  }, [inUseLot, product.capacity])
+  }, [inUseLot, product.capacity, isLiquid])
 
   const getStatusInfo = () => {
-    if (product.lotQuantity > 0) {
-      return {
-        color: 'text-green-600',
-        bgColor: 'bg-green-500',
-        label: '在庫あり'
+    // 液体商品（ポリッシュ、ジェルなど）の在庫状態
+    if (isLiquid) {
+      if (product.lotQuantity > 0) {
+        return {
+          color: 'text-green-600',
+          bgColor: 'bg-green-500',
+          label: '在庫あり'
+        }
       }
-    }
 
-    if (inUseLot && remainingPercentage > 0) {
-      if (remainingPercentage > 50) {
+      if (inUseLot && remainingPercentage > 0) {
+        if (remainingPercentage > 50) {
+          return {
+            color: 'text-blue-600',
+            bgColor: 'bg-blue-500',
+            label: '使用中'
+          }
+        }
+        return {
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-500',
+          label: '残量わずか'
+        }
+      }
+
+      return {
+        color: 'text-red-600',
+        bgColor: 'bg-red-500',
+        label: '在庫なし'
+      }
+    } 
+    // 非液体商品（ツール、消耗品など）の在庫状態
+    else {
+      if (product.totalQuantity > product.minStockAlert * 2) {
+        return {
+          color: 'text-green-600',
+          bgColor: 'bg-green-500',
+          label: '十分な在庫'
+        }
+      } else if (product.totalQuantity > product.minStockAlert) {
         return {
           color: 'text-blue-600',
           bgColor: 'bg-blue-500',
-          label: '使用中'
+          label: '在庫あり'
+        }
+      } else if (product.totalQuantity > 0) {
+        return {
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-500',
+          label: '在庫わずか'
+        }
+      } else {
+        return {
+          color: 'text-red-600',
+          bgColor: 'bg-red-500',
+          label: '在庫なし'
         }
       }
-      return {
-        color: 'text-yellow-600',
-        bgColor: 'bg-yellow-500',
-        label: '残量わずか'
-      }
-    }
-
-    return {
-      color: 'text-red-600',
-      bgColor: 'bg-red-500',
-      label: '在庫なし'
     }
   }
 
   const status = getStatusInfo()
-  const showBasicAlert = !product.lotQuantity && 
-    remainingPercentage < product.recommendedAlertPercentage
+  
+  // アラート条件の計算
+  let showBasicAlert = false
+  if (isLiquid) {
+    // 液体商品のアラート（容量ベース）
+    showBasicAlert = !product.lotQuantity && 
+      remainingPercentage < product.recommendedAlertPercentage
+  } else {
+    // 非液体商品のアラート（個数ベース）
+    showBasicAlert = product.totalQuantity <= product.minStockAlert
+  }
   
   // 予測に基づくアラート条件
   const showPredictionAlert = prediction && 
@@ -77,6 +119,11 @@ export default function StockStatus({
   const containerClasses = compact 
     ? 'p-2 rounded-md bg-white'
     : 'p-4 rounded-lg border bg-white shadow-sm'
+
+  // 非液体商品の在庫残量パーセンテージを計算
+  const nonLiquidPercentage = product.minStockAlert > 0 
+    ? Math.min(100, Math.round((product.totalQuantity / (product.minStockAlert * 2)) * 100))
+    : product.totalQuantity > 0 ? 100 : 0
 
   return (
     <div className={containerClasses}>
@@ -91,27 +138,31 @@ export default function StockStatus({
           {showBasicAlert && (
             <AlertTriangle className="h-4 w-4 text-yellow-500" />
           )}
-          {showPredictionAlert && (
+          {showPredictionAlert && isLiquid && (
             <TrendingUp className="h-4 w-4 text-blue-500" />
           )}
         </div>
       </div>
 
       <div className="space-y-3">
-        {/* 未使用ロット表示 */}
-        {product.lotQuantity > 0 && (
-          <div className="flex items-center gap-2">
-            <div className={`px-2 py-1 rounded text-xs ${status.color} bg-opacity-10`}>
-              {status.label}
-            </div>
+        {/* 商品状態表示 */}
+        <div className="flex items-center gap-2">
+          <div className={`px-2 py-1 rounded text-xs ${status.color} bg-opacity-10`}>
+            {status.label}
+          </div>
+          {isLiquid ? (
             <span className="text-sm text-gray-600">
               未使用: {product.lotQuantity}個
             </span>
-          </div>
-        )}
+          ) : (
+            <span className="text-sm text-gray-600">
+              在庫数: {product.totalQuantity}個
+            </span>
+          )}
+        </div>
 
-        {/* 使用中ロット表示 */}
-        {inUseLot && (
+        {/* 液体商品の使用中ロット表示 */}
+        {isLiquid && inUseLot && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">使用中</span>
@@ -133,8 +184,23 @@ export default function StockStatus({
           </div>
         )}
 
-        {/* 予測情報（詳細モードのみ） */}
-        {showDetails && prediction && (
+        {/* 非液体商品の在庫表示 */}
+        {!isLiquid && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">アラート在庫数: {product.minStockAlert}個</span>
+              <span className="font-medium">{nonLiquidPercentage}%</span>
+            </div>
+            <Progress 
+              value={nonLiquidPercentage}
+              className="h-2"
+              indicatorClassName={status.bgColor}
+            />
+          </div>
+        )}
+
+        {/* 予測情報（詳細モードで液体商品のみ） */}
+        {showDetails && isLiquid && prediction && (
           <div className="mt-4 pt-4 border-t space-y-2">
             <h4 className="text-sm font-medium flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -165,7 +231,7 @@ export default function StockStatus({
                 <span className="text-gray-500">総在庫数:</span>
                 <span className="ml-2 font-medium">{product.totalQuantity}個</span>
               </div>
-              {product.averageUsesPerMonth && (
+              {isLiquid && product.averageUsesPerMonth && (
                 <div>
                   <span className="text-gray-500">月平均使用:</span>
                   <span className="ml-2 font-medium">
@@ -173,7 +239,7 @@ export default function StockStatus({
                   </span>
                 </div>
               )}
-              {product.capacity && (
+              {isLiquid && product.capacity && (
                 <div className="col-span-2">
                   <span className="text-gray-500">商品容量:</span>
                   <span className="ml-2 font-medium">
